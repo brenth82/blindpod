@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "@/lib/auth-client";
+import { useConvexAuth } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -12,7 +13,8 @@ const navLinks = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { isAuthenticated } = useConvexAuth();
+  const { signOut } = useAuthActions();
 
   return (
     <nav aria-label="Main navigation" className="bg-gray-900 text-white">
@@ -32,9 +34,7 @@ export function Nav() {
                 href={href}
                 aria-current={pathname === href ? "page" : undefined}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-700 focus-visible:outline-white ${
-                  pathname === href
-                    ? "bg-blue-700 text-white"
-                    : "text-gray-200"
+                  pathname === href ? "bg-blue-700 text-white" : "text-gray-200"
                 }`}
               >
                 {label}
@@ -43,9 +43,9 @@ export function Nav() {
           ))}
 
           <li>
-            {session ? (
+            {isAuthenticated ? (
               <button
-                onClick={() => signOut()}
+                onClick={() => void signOut()}
                 className="px-3 py-1 rounded text-sm font-medium text-gray-200 hover:bg-gray-700 focus-visible:outline-white transition-colors"
               >
                 Log out
@@ -55,9 +55,7 @@ export function Nav() {
                 href="/login"
                 aria-current={pathname === "/login" ? "page" : undefined}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-700 focus-visible:outline-white ${
-                  pathname === "/login"
-                    ? "bg-blue-700 text-white"
-                    : "text-gray-200"
+                  pathname === "/login" ? "bg-blue-700 text-white" : "text-gray-200"
                 }`}
               >
                 Log in

@@ -1,8 +1,3 @@
-export default {
-  providers: [
-    {
-      domain: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-      applicationID: "blindpod",
-    },
-  ],
-};
+// Auth is configured in convex/auth.ts via @convex-dev/auth.
+// This file is intentionally empty — @convex-dev/auth manages the JWT config.
+export default {};

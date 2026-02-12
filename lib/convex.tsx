@@ -1,13 +1,23 @@
 "use client";
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { ReactNode } from "react";
+import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
+import { ConvexReactClient } from "convex/react";
+import { ReactNode, useEffect, useState } from "react";
 
-// NEXT_PUBLIC_CONVEX_URL must be set in .env.local (from `npx convex dev` output)
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || "https://placeholder.convex.cloud";
-
 const convex = new ConvexReactClient(convexUrl);
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // During SSR prerender, don't render children — Convex hooks require a live
+  // browser connection and will throw if context is absent.
+  if (!mounted) return null;
+
+  return (
+    <ConvexAuthNextjsProvider client={convex}>
+      {children}
+    </ConvexAuthNextjsProvider>
+  );
 }

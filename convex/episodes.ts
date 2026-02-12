@@ -1,10 +1,13 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const unlistenedFeed = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    // Get subscribed podcast IDs
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -12,43 +15,35 @@ export const unlistenedFeed = query({
 
     if (subs.length === 0) return [];
 
-    const podcastIds = subs.map((s) => s.podcastId);
-
-    // Get all listened episode IDs for this user
     const listenedRecords = await ctx.db
       .query("listenedEpisodes")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const listenedEpisodeIds = new Set(
-      listenedRecords.map((r) => r.episodeId.toString())
-    );
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
 
-    // Gather episodes from all subscribed podcasts
     const allEpisodes = (
       await Promise.all(
-        podcastIds.map((podcastId) =>
+        subs.map((sub) =>
           ctx.db
             .query("episodes")
-            .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+            .withIndex("by_podcast", (q) => q.eq("podcastId", sub.podcastId))
             .collect()
         )
       )
     ).flat();
 
-    // Filter out listened episodes and archived episodes, sort by publishedAt desc
     return allEpisodes
-      .filter(
-        (ep) =>
-          !ep.isArchivedFromFeed &&
-          !listenedEpisodeIds.has(ep._id.toString())
-      )
+      .filter((ep) => !ep.isArchivedFromFeed && !listenedIds.has(ep._id.toString()))
       .sort((a, b) => b.publishedAt - a.publishedAt);
   },
 });
 
 export const archiveFeed = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -56,22 +51,18 @@ export const archiveFeed = query({
 
     if (subs.length === 0) return [];
 
-    const podcastIds = subs.map((s) => s.podcastId);
-
     const listenedRecords = await ctx.db
       .query("listenedEpisodes")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const listenedEpisodeIds = new Set(
-      listenedRecords.map((r) => r.episodeId.toString())
-    );
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
 
     const allEpisodes = (
       await Promise.all(
-        podcastIds.map((podcastId) =>
+        subs.map((sub) =>
           ctx.db
             .query("episodes")
-            .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+            .withIndex("by_podcast", (q) => q.eq("podcastId", sub.podcastId))
             .collect()
         )
       )
@@ -79,16 +70,16 @@ export const archiveFeed = query({
 
     return allEpisodes
       .sort((a, b) => b.publishedAt - a.publishedAt)
-      .map((ep) => ({
-        ...ep,
-        listened: listenedEpisodeIds.has(ep._id.toString()),
-      }));
+      .map((ep) => ({ ...ep, listened: listenedIds.has(ep._id.toString()) }));
   },
 });
 
 export const markListened = mutation({
-  args: { episodeId: v.id("episodes"), userId: v.id("users") },
-  handler: async (ctx, { episodeId, userId }) => {
+  args: { episodeId: v.id("episodes") },
+  handler: async (ctx, { episodeId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     const existing = await ctx.db
       .query("listenedEpisodes")
       .withIndex("by_user_episode", (q) =>
@@ -108,8 +99,11 @@ export const markListened = mutation({
 });
 
 export const markUnlistened = mutation({
-  args: { episodeId: v.id("episodes"), userId: v.id("users") },
-  handler: async (ctx, { episodeId, userId }) => {
+  args: { episodeId: v.id("episodes") },
+  handler: async (ctx, { episodeId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     const existing = await ctx.db
       .query("listenedEpisodes")
       .withIndex("by_user_episode", (q) =>

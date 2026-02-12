@@ -3,14 +3,13 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signUp } from "@/lib/auth-client";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 export const dynamic = "force-dynamic";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { signIn } = useAuthActions();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,33 +21,21 @@ export default function RegisterPage() {
   const passwordId = useId();
   const errorId = useId();
 
-  const ensureUser = useMutation(api.users.ensureUser);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true);
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
-      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     try {
-      const result = await signUp.email({ name, email, password });
-      const r = result as { error?: { message?: string } };
-      if (r.error) {
-        setError(r.error.message ?? "Registration failed. Please try again.");
-        return;
-      }
-
-      // Sync user into Convex
-      await ensureUser({ email, name });
-
+      await signIn("password", { name, email, password, flow: "signUp" });
       router.push("/");
     } catch {
-      setError("An unexpected error occurred. Please try again.");
+      setError("Registration failed. That email may already be in use.");
     } finally {
       setIsLoading(false);
     }

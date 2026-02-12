@@ -3,12 +3,13 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "@/lib/auth-client";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { signIn } = useAuthActions();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,15 +25,10 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signIn.email({ email, password });
-      const r = result as { error?: { message?: string } };
-      if (r.error) {
-        setError(r.error.message ?? "Invalid email or password.");
-      } else {
-        router.push("/");
-      }
+      await signIn("password", { email, password, flow: "signIn" });
+      router.push("/");
     } catch {
-      setError("An unexpected error occurred. Please try again.");
+      setError("Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }

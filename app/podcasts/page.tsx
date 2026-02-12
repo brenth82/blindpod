@@ -2,8 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { useSession } from "@/lib/auth-client";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { PodcastCard } from "@/components/PodcastCard";
 import Link from "next/link";
@@ -12,48 +11,29 @@ import type { Id } from "@/convex/_generated/dataModel";
 export const dynamic = "force-dynamic";
 
 export default function PodcastsPage() {
-  const { data: session, isPending } = useSession();
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isPending && !session) {
+    if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isPending, session, router]);
-
-  const convexUser = useQuery(
-    api.users.getUserByEmail,
-    session?.user?.email ? { email: session.user.email } : "skip"
-  );
-  const userId = convexUser?._id as Id<"users"> | undefined;
+  }, [isLoading, isAuthenticated, router]);
 
   const podcasts = useQuery(
     api.podcasts.subscribedPodcasts,
-    userId ? { userId } : "skip"
+    isAuthenticated ? {} : "skip"
   );
 
   const unsubscribeMutation = useMutation(api.podcasts.unsubscribe);
 
   const handleUnsubscribe = async (podcastId: string) => {
-    if (!userId) return;
-    if (
-      !window.confirm(
-        "Are you sure you want to unsubscribe from this podcast?"
-      )
-    )
-      return;
-    await unsubscribeMutation({
-      podcastId: podcastId as Id<"podcasts">,
-      userId,
-    });
+    if (!window.confirm("Are you sure you want to unsubscribe from this podcast?")) return;
+    await unsubscribeMutation({ podcastId: podcastId as Id<"podcasts"> });
   };
 
-  if (isPending || !session) {
-    return (
-      <p role="status" aria-live="polite">
-        Loading…
-      </p>
-    );
+  if (isLoading || !isAuthenticated) {
+    return <p role="status" aria-live="polite">Loading…</p>;
   }
 
   return (
@@ -69,9 +49,7 @@ export default function PodcastsPage() {
       </div>
 
       {podcasts === undefined ? (
-        <p role="status" aria-live="polite">
-          Loading podcasts…
-        </p>
+        <p role="status" aria-live="polite">Loading podcasts…</p>
       ) : podcasts.length === 0 ? (
         <section aria-label="No subscriptions">
           <p className="text-gray-600 text-lg mb-4">
@@ -93,10 +71,7 @@ export default function PodcastsPage() {
             {podcasts.map((podcast) =>
               podcast ? (
                 <li key={podcast._id}>
-                  <PodcastCard
-                    podcast={podcast}
-                    onUnsubscribe={handleUnsubscribe}
-                  />
+                  <PodcastCard podcast={podcast} onUnsubscribe={handleUnsubscribe} />
                 </li>
               ) : null
             )}

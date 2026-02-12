@@ -1,11 +1,9 @@
 "use client";
 
-import { createAuthClient } from "better-auth/react";
+// Auth is handled by @convex-dev/auth.
+// Use these hooks in client components:
+//   useAuthActions() — signIn, signOut
+//   useConvexAuth()  — isAuthenticated, isLoading
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-// createAuthClient is safe to call server-side as long as baseURL is absolute.
-// We ensure NEXT_PUBLIC_APP_URL is always set as an absolute URL.
-export const authClient = createAuthClient({ baseURL: BASE_URL });
-
-export const { signIn, signOut, signUp, useSession } = authClient;
+export { useAuthActions } from "@convex-dev/auth/react";
+export { useConvexAuth } from "convex/react";

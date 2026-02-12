@@ -1,13 +1,16 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
-  users: defineTable({
-    email: v.string(),
-    name: v.string(),
-    emailVerified: v.boolean(),
+  // Auth tables managed by @convex-dev/auth (users, sessions, accounts, etc.)
+  ...authTables,
+
+  // App-specific user preferences, keyed to the auth user by userId
+  userProfiles: defineTable({
+    userId: v.id("users"),
     notifyOnNewEpisodes: v.boolean(),
-  }).index("by_email", ["email"]),
+  }).index("by_user", ["userId"]),
 
   podcasts: defineTable({
     rssUrl: v.string(),

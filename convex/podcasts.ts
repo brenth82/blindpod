@@ -1,8 +1,8 @@
-import { action, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Internal mutation: upsert podcast + episodes and subscribe user
+// Internal mutation called from podcastActions.ts (Node runtime)
 export const upsertPodcastAndSubscribe = mutation({
   args: {
     rssUrl: v.string(),
@@ -23,7 +23,6 @@ export const upsertPodcastAndSubscribe = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    // Upsert podcast
     let podcastId: string;
     const existing = await ctx.db
       .query("podcasts")
@@ -50,7 +49,6 @@ export const upsertPodcastAndSubscribe = mutation({
       });
     }
 
-    // Upsert episodes
     for (const ep of args.episodes) {
       const existingEp = await ctx.db
         .query("episodes")
@@ -73,7 +71,6 @@ export const upsertPodcastAndSubscribe = mutation({
       }
     }
 
-    // Subscribe user if not already subscribed
     const existingSub = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_podcast", (q) =>
@@ -94,58 +91,12 @@ export const upsertPodcastAndSubscribe = mutation({
   },
 });
 
-// Action: fetch RSS, parse, store
-export const addPodcast = action({
-  args: { rssUrl: v.string(), userId: v.id("users") },
-  handler: async (ctx, { rssUrl, userId }) => {
-    // Dynamic import to avoid SSR issues
-    const Parser = (await import("rss-parser")).default;
-    const parser = new Parser();
-
-    let feed;
-    try {
-      feed = await parser.parseURL(rssUrl);
-    } catch (err) {
-      throw new Error(
-        `Failed to parse RSS feed: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-
-    const episodes = (feed.items ?? [])
-      .filter((item) => item.enclosure?.url)
-      .map((item) => ({
-        guid: item.guid ?? item.link ?? item.title ?? String(Date.now()),
-        title: item.title ?? "Untitled Episode",
-        description: item.contentSnippet ?? item.content ?? undefined,
-        audioUrl: item.enclosure!.url,
-        durationSeconds: item.itunes?.duration
-          ? parseDuration(item.itunes.duration)
-          : undefined,
-        publishedAt: item.pubDate ? new Date(item.pubDate).getTime() : Date.now(),
-      }));
-
-    await ctx.runMutation((internal as any).podcasts.upsertPodcastAndSubscribe, {
-      rssUrl,
-      title: feed.title ?? "Unknown Podcast",
-      description: feed.description ?? undefined,
-      imageUrl: feed.image?.url ?? (feed as any).itunes?.image ?? undefined,
-      author: (feed as any).itunes?.author ?? undefined,
-      episodes,
-      userId,
-    });
-  },
-});
-
-function parseDuration(duration: string): number {
-  const parts = duration.split(":").map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return parseInt(duration, 10) || 0;
-}
-
 export const subscribedPodcasts = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -160,8 +111,11 @@ export const subscribedPodcasts = query({
 });
 
 export const unsubscribe = mutation({
-  args: { podcastId: v.id("podcasts"), userId: v.id("users") },
-  handler: async (ctx, { podcastId, userId }) => {
+  args: { podcastId: v.id("podcasts") },
+  handler: async (ctx, { podcastId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     const sub = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_podcast", (q) =>
