@@ -16,7 +16,7 @@ export const ResendOTP = Resend({
   async sendVerificationRequest({ identifier: email, provider, token }) {
     const resend = new ResendAPI(provider.apiKey);
     const { error } = await resend.emails.send({
-      from: "Blindpod <noreply@blindpod.com>",
+      from: "Blindpod <noreply@validhit.com>",
       to: [email],
       subject: "Verify your Blindpod account",
       text: `Your Blindpod verification code is: ${token}\n\nThis code expires in 1 hour.\n\nIf you did not request this, you can ignore this email.`,
