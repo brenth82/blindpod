@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as episodes from "../episodes.js";
+import type * as feedRefresh from "../feedRefresh.js";
 import type * as http from "../http.js";
 import type * as podcastActions from "../podcastActions.js";
 import type * as podcasts from "../podcasts.js";
@@ -23,7 +25,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  crons: typeof crons;
   episodes: typeof episodes;
+  feedRefresh: typeof feedRefresh;
   http: typeof http;
   podcastActions: typeof podcastActions;
   podcasts: typeof podcasts;

@@ -59,7 +59,7 @@
 - **Frontend:** Next.js 14+ (App Router), React, TypeScript
 - **Backend/Database:** Convex (real-time, serverless)
 - **Authentication:** Better Auth + Convex integration
-- **Email:** Mailslerp for transactional emails
+- **Email:** Resend for transactional emails
 - **Hosting:** Vercel (frontend), Convex (backend)
 
 **Key Components:**
@@ -72,7 +72,7 @@
 **Integrations:**
 - Podcast RSS feeds (standard format)
 - Better Auth identity providers
-- Mailslerp SMTP/API
+- Resend SMTP/API
 
 ## FUNCTIONAL REQUIREMENTS
 **Core Features (MVP):**
@@ -102,7 +102,7 @@
 - Set up Next.js + Convex + Better Auth
 - Implement user registration, login, email verification
 - Design accessible component library
-- Set up Mailslerp integration
+- Set up Resend integration
 
 **Phase 2 - Core Features (Weeks 4-7):**
 - RSS feed parsing and storage
@@ -202,7 +202,7 @@ PROJECT SCAFFOLD:
 - **Frontend:** Next.js 14+ (App Router), React, TypeScript
 - **Backend/Database:** Convex (real-time, serverless)
 - **Authentication:** Better Auth + Convex integration
-- **Email:** Mailslerp for transactional emails
+- **Email:** Resend for transactional emails
 - **Hosting:** Vercel (frontend), Convex (backend)
 
 **Key Components:**
@@ -215,7 +215,7 @@ PROJECT SCAFFOLD:
 **Integrations:**
 - Podcast RSS feeds (standard format)
 - Better Auth identity providers
-- Mailslerp SMTP/API
+- Resend SMTP/API
 
 ## FUNCTIONAL REQUIREMENTS
 **Core Features (MVP):**
@@ -245,7 +245,7 @@ PROJECT SCAFFOLD:
 - Set up Next.js + Convex + Better Auth
 - Implement user registration, login, email verification
 - Design accessible component library
-- Set up Mailslerp integration
+- Set up Resend integration
 
 **Phase 2 - Core Features (Weeks 4-7):**
 - RSS feed parsing and storage
