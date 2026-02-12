@@ -11,7 +11,12 @@
       "Bash(Write-Host \"done\")",
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx convex env set:*)",
+      "Bash(npx @convex-dev/auth:*)",
+      "Bash(npx convex deploy:*)",
+      "Bash(npx convex dev --once)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\brent\\\\Downloads\\\\code\\\\blindpod\\\\app\" -Recurse -Name -Filter \"*.tsx\")"
     ]
   }
 }

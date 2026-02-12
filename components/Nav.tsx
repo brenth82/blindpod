@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
-const navLinks = [
-  { href: "/", label: "Home" },
+const publicLinks = [{ href: "/", label: "Home" }];
+const authLinks = [
   { href: "/podcasts", label: "Podcasts" },
   { href: "/archive", label: "Archive" },
 ];
@@ -28,7 +28,7 @@ export function Nav() {
         </Link>
 
         <ul className="flex gap-4 list-none m-0 p-0" role="list">
-          {navLinks.map(({ href, label }) => (
+          {[...publicLinks, ...(isAuthenticated ? authLinks : [])].map(({ href, label }) => (
             <li key={href}>
               <Link
                 href={href}

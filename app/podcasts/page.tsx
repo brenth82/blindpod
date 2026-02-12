@@ -38,15 +38,7 @@ export default function PodcastsPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Your Podcasts</h1>
-        <Link
-          href="/podcasts/add"
-          className="px-4 py-2 bg-blue-700 text-white font-semibold rounded hover:bg-blue-800 focus-visible:outline-blue-700 transition-colors text-sm"
-        >
-          Add podcast
-        </Link>
-      </div>
+      <h1 className="text-3xl font-bold mb-6">Your Podcasts</h1>
 
       {podcasts === undefined ? (
         <p role="status" aria-live="polite">Loading podcasts…</p>
@@ -76,6 +68,14 @@ export default function PodcastsPage() {
               ) : null
             )}
           </ol>
+          <p className="mt-6">
+            <Link
+              href="/podcasts/add"
+              className="text-blue-700 underline text-sm"
+            >
+              Add another podcast
+            </Link>
+          </p>
         </section>
       )}
     </>

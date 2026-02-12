@@ -1,6 +1,6 @@
 "use client";
 
-import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { ReactNode, useEffect, useState } from "react";
 
@@ -11,13 +11,12 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // During SSR prerender, don't render children — Convex hooks require a live
-  // browser connection and will throw if context is absent.
+  // Don't render until client-side — Convex auth hooks require a browser context.
   if (!mounted) return null;
 
   return (
-    <ConvexAuthNextjsProvider client={convex}>
+    <ConvexAuthProvider client={convex}>
       {children}
-    </ConvexAuthNextjsProvider>
+    </ConvexAuthProvider>
   );
 }

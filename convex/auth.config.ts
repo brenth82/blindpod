@@ -1,3 +1,8 @@
-// Auth is configured in convex/auth.ts via @convex-dev/auth.
-// This file is intentionally empty — @convex-dev/auth manages the JWT config.
-export default {};
+export default {
+  providers: [
+    {
+      domain: process.env.CONVEX_SITE_URL,
+      applicationID: "convex",
+    },
+  ],
+};
