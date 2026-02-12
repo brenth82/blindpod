@@ -1,0 +1,71 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { signOut, useSession } from "@/lib/auth-client";
+
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/podcasts", label: "Podcasts" },
+  { href: "/archive", label: "Archive" },
+];
+
+export function Nav() {
+  const pathname = usePathname();
+  const { data: session } = useSession();
+
+  return (
+    <nav aria-label="Main navigation" className="bg-gray-900 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <Link
+          href="/"
+          className="text-xl font-bold text-white hover:text-blue-300 focus-visible:outline-white"
+          aria-label="Blindpod — go to home"
+        >
+          Blindpod
+        </Link>
+
+        <ul className="flex gap-4 list-none m-0 p-0" role="list">
+          {navLinks.map(({ href, label }) => (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-current={pathname === href ? "page" : undefined}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-700 focus-visible:outline-white ${
+                  pathname === href
+                    ? "bg-blue-700 text-white"
+                    : "text-gray-200"
+                }`}
+              >
+                {label}
+              </Link>
+            </li>
+          ))}
+
+          <li>
+            {session ? (
+              <button
+                onClick={() => signOut()}
+                className="px-3 py-1 rounded text-sm font-medium text-gray-200 hover:bg-gray-700 focus-visible:outline-white transition-colors"
+              >
+                Log out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                aria-current={pathname === "/login" ? "page" : undefined}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-700 focus-visible:outline-white ${
+                  pathname === "/login"
+                    ? "bg-blue-700 text-white"
+                    : "text-gray-200"
+                }`}
+              >
+                Log in
+              </Link>
+            )}
+          </li>
+        </ul>
+      </div>
+    </nav>
+  );
+}

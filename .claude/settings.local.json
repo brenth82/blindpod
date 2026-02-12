@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e:*)",
+      "Bash(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\brent\\\\Downloads\\\\code\\\\blindpod\\\\app\\\\api\\\\auth\\\\[...all]\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Host \"done\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(node:*)"
+    ]
+  }
+}
