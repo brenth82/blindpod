@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const currentUser = query({
@@ -7,6 +8,44 @@ export const currentUser = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
     return await ctx.db.get(userId);
+  },
+});
+
+export const getUserProfile = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    // Return defaults if no profile row exists yet
+    return profile ?? { notifyOnNewEpisodes: false };
+  },
+});
+
+export const updateNotificationPreference = mutation({
+  args: { notifyOnNewEpisodes: v.boolean() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const existing = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        notifyOnNewEpisodes: args.notifyOnNewEpisodes,
+      });
+    } else {
+      await ctx.db.insert("userProfiles", {
+        userId,
+        notifyOnNewEpisodes: args.notifyOnNewEpisodes,
+      });
+    }
   },
 });
 

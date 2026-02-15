@@ -9,6 +9,7 @@ const publicLinks = [{ href: "/", label: "Home" }];
 const authLinks = [
   { href: "/podcasts", label: "Podcasts" },
   { href: "/archive", label: "Archive" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function Nav() {
