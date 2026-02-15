@@ -62,8 +62,8 @@ export const searchPodcasts = action({
 });
 
 export const addPodcast = action({
-  args: { rssUrl: v.string() },
-  handler: async (ctx, { rssUrl }) => {
+  args: { rssUrl: v.string(), markAllListened: v.optional(v.boolean()) },
+  handler: async (ctx, { rssUrl, markAllListened }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -100,6 +100,7 @@ export const addPodcast = action({
       author: (feed as any).itunes?.author ?? undefined,
       episodes,
       userId,
+      markAllListened: markAllListened ?? false,
     });
   },
 });

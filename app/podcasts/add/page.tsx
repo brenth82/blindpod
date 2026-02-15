@@ -80,6 +80,9 @@ export default function AddPodcastPage() {
     (subscribedPodcasts ?? []).map((p) => p?.rssUrl).filter(Boolean)
   );
 
+  // ── Shared "mark all listened" toggle ──────────────────────────────────
+  const [markAllListened, setMarkAllListened] = useState(false);
+
   // ── Search tab state ────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PodcastSearchResult[] | null>(null);
@@ -125,6 +128,7 @@ export default function AddPodcastPage() {
   const opmlFileId = useId();
   const opmlErrorId = useId();
   const opmlProgressId = useId();
+  const markAllListenedId = useId();
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
@@ -156,7 +160,7 @@ export default function AddPodcastPage() {
     setAddError("");
     setAddingFeedUrl(result.feedUrl);
     try {
-      await addPodcast({ rssUrl: result.feedUrl });
+      await addPodcast({ rssUrl: result.feedUrl, markAllListened });
       setAddedFeedUrls((prev) => new Set(prev).add(result.feedUrl));
       setLiveMessage(`${result.title} added to Blindpod.`);
     } catch (err) {
@@ -185,7 +189,7 @@ export default function AddPodcastPage() {
     }
     setIsFetching(true);
     try {
-      await addPodcast({ rssUrl: url });
+      await addPodcast({ rssUrl: url, markAllListened });
       setUrlSuccess("Podcast added! Redirecting to your podcasts…");
       setRssUrl("");
       setTimeout(() => router.push("/podcasts"), 1500);
@@ -241,7 +245,7 @@ export default function AddPodcastPage() {
     const errors: string[] = [];
     for (let i = 0; i < newFeeds.length; i++) {
       try {
-        await addPodcast({ rssUrl: newFeeds[i].url });
+        await addPodcast({ rssUrl: newFeeds[i].url, markAllListened });
       } catch {
         errors.push(newFeeds[i].title);
       }
@@ -281,7 +285,23 @@ export default function AddPodcastPage() {
         </ol>
       </nav>
 
-      <h1 className="text-3xl font-bold mb-6">Add a podcast</h1>
+      <h1 className="text-3xl font-bold mb-4">Add a podcast</h1>
+
+      {/* ── Mark all listened toggle — shared across all add methods ── */}
+      <div className="flex items-start gap-3 mb-6 p-3 bg-gray-100 rounded max-w-xl">
+        <input
+          id={markAllListenedId}
+          type="checkbox"
+          checked={markAllListened}
+          onChange={(e) => setMarkAllListened(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-gray-400 text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 cursor-pointer"
+        />
+        <label htmlFor={markAllListenedId} className="text-sm text-gray-800 cursor-pointer select-none">
+          <span className="font-medium">I&rsquo;m already caught up</span> — mark all
+          existing episodes as listened and archive them. Only new episodes will appear
+          in your feed.
+        </label>
+      </div>
 
       {/* ── Tab list ── */}
       <div

@@ -21,6 +21,7 @@ export const upsertPodcastAndSubscribe = mutation({
       })
     ),
     userId: v.id("users"),
+    markAllListened: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     let podcastId: string;
@@ -85,6 +86,36 @@ export const upsertPodcastAndSubscribe = mutation({
         notificationsEnabled: false,
         subscribedAt: Date.now(),
       });
+    }
+
+    // If the user wants all existing episodes marked as listened and archived,
+    // bulk-insert listenedEpisodes records and archive every episode now.
+    if (args.markAllListened) {
+      const allEpisodes = await ctx.db
+        .query("episodes")
+        .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId as any))
+        .collect();
+      const now = Date.now();
+      for (const ep of allEpisodes) {
+        // Archive so these don't appear as new unlistened content
+        await ctx.db.patch(ep._id, { isArchivedFromFeed: true });
+
+        // Only insert a listened record if one doesn't already exist
+        const alreadyListened = await ctx.db
+          .query("listenedEpisodes")
+          .withIndex("by_user_episode", (q) =>
+            q.eq("userId", args.userId).eq("episodeId", ep._id)
+          )
+          .unique();
+        if (!alreadyListened) {
+          await ctx.db.insert("listenedEpisodes", {
+            userId: args.userId,
+            episodeId: ep._id,
+            listenedAt: now,
+            positionSeconds: 0,
+          });
+        }
+      }
     }
 
     return podcastId;
