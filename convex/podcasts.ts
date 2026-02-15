@@ -199,7 +199,8 @@ export const refreshPodcastFeed = internalMutation({
 
     const feedGuids = new Set(args.episodes.map((e) => e.guid));
 
-    // Insert new episodes (skip existing)
+    // Insert new episodes (skip existing) and collect them for notification
+    const newEpisodes: { title: string; publishedAt: number }[] = [];
     for (const ep of args.episodes) {
       const existing = await ctx.db
         .query("episodes")
@@ -218,6 +219,7 @@ export const refreshPodcastFeed = internalMutation({
           publishedAt: ep.publishedAt,
           isArchivedFromFeed: false,
         });
+        newEpisodes.push({ title: ep.title, publishedAt: ep.publishedAt });
       }
     }
 
@@ -232,5 +234,38 @@ export const refreshPodcastFeed = internalMutation({
         await ctx.db.patch(ep._id, { isArchivedFromFeed: true });
       }
     }
+
+    // Return newly inserted episodes so the calling action can send notifications
+    return newEpisodes;
+  },
+});
+
+/**
+ * Returns subscribers who have notifications enabled, along with when they
+ * subscribed. The caller is responsible for filtering by subscribedAt so that
+ * episodes that existed before a user subscribed never trigger emails.
+ */
+export const getSubscribersForNotification = internalQuery({
+  args: { podcastId: v.id("podcasts") },
+  handler: async (ctx, { podcastId }) => {
+    const subs = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+      .collect();
+
+    const result: { email: string; subscribedAt: number }[] = [];
+    for (const sub of subs) {
+      const profile = await ctx.db
+        .query("userProfiles")
+        .withIndex("by_user", (q) => q.eq("userId", sub.userId))
+        .unique();
+      if (!profile?.notifyOnNewEpisodes) continue;
+
+      const user = await ctx.db.get(sub.userId);
+      if (!user?.email) continue;
+
+      result.push({ email: user.email as string, subscribedAt: sub.subscribedAt });
+    }
+    return result;
   },
 });

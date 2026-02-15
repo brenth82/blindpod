@@ -72,6 +72,7 @@ export default function AddPodcastPage() {
   // ── Shared actions / queries ────────────────────────────────────────────
   const searchPodcasts = useAction(api.podcastActions.searchPodcasts);
   const addPodcast = useAction(api.podcastActions.addPodcast);
+  const importOpmlFeeds = useAction(api.podcastActions.importOpmlFeeds);
   const subscribedPodcasts = useQuery(
     api.podcasts.subscribedPodcasts,
     isAuthenticated ? {} : "skip"
@@ -104,11 +105,11 @@ export default function AddPodcastPage() {
   const [opmlStep, setOpmlStep] = useState<OpmlStep>("idle");
   const [opmlFeeds, setOpmlFeeds] = useState<OpmlFeed[]>([]);
   const [opmlParseError, setOpmlParseError] = useState("");
-  const [importProgress, setImportProgress] = useState({
-    done: 0,
-    total: 0,
-    errors: [] as string[],
-  });
+  const [importResult, setImportResult] = useState<{
+    succeeded: number;
+    failedTitles: string[];
+    total: number;
+  } | null>(null);
   const opmlFileRef = useRef<HTMLInputElement>(null);
 
   // ── ARIA IDs ────────────────────────────────────────────────────────────
@@ -236,20 +237,19 @@ export default function AddPodcastPage() {
   const handleImport = async () => {
     const newFeeds = opmlFeeds.filter((f) => !subscribedUrls.has(f.url));
     if (newFeeds.length === 0) {
+      setImportResult({ succeeded: 0, failedTitles: [], total: 0 });
       setOpmlStep("done");
-      setImportProgress({ done: 0, total: 0, errors: [] });
       return;
     }
     setOpmlStep("importing");
-    setImportProgress({ done: 0, total: newFeeds.length, errors: [] });
-    const errors: string[] = [];
-    for (let i = 0; i < newFeeds.length; i++) {
-      try {
-        await addPodcast({ rssUrl: newFeeds[i].url, markAllListened });
-      } catch {
-        errors.push(newFeeds[i].title);
-      }
-      setImportProgress({ done: i + 1, total: newFeeds.length, errors: [...errors] });
+    try {
+      // All RSS fetching happens server-side — the browser just waits for one response
+      const result = await importOpmlFeeds({ feeds: newFeeds, markAllListened });
+      setImportResult({ ...result, total: newFeeds.length });
+    } catch {
+      setOpmlParseError("Import failed. Please try again.");
+      setOpmlStep("preview");
+      return;
     }
     setOpmlStep("done");
   };
@@ -258,7 +258,7 @@ export default function AddPodcastPage() {
     setOpmlStep("idle");
     setOpmlFeeds([]);
     setOpmlParseError("");
-    setImportProgress({ done: 0, total: 0, errors: [] });
+    setImportResult(null);
     if (opmlFileRef.current) opmlFileRef.current.value = "";
   };
 
@@ -269,7 +269,6 @@ export default function AddPodcastPage() {
   // Derived OPML counts
   const newFeeds = opmlFeeds.filter((f) => !subscribedUrls.has(f.url));
   const alreadySubCount = opmlFeeds.length - newFeeds.length;
-  const importedCount = importProgress.done - importProgress.errors.length;
 
   return (
     <>
@@ -701,72 +700,64 @@ export default function AddPodcastPage() {
           </div>
         )}
 
-        {/* Importing progress */}
+        {/* Importing — all RSS fetching happens server-side; browser just waits */}
         {opmlStep === "importing" && (
           <div className="max-w-lg">
             <p
-              id={opmlProgressId}
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="text-sm text-gray-700 mb-2"
+              className="text-sm text-gray-700 mb-3"
             >
-              Importing podcast {importProgress.done} of {importProgress.total}…
+              Importing {newFeeds.length}{" "}
+              {newFeeds.length === 1 ? "podcast" : "podcasts"} — fetching feeds on
+              the server. This may take a moment for large libraries.
             </p>
             <div
-              className="w-full bg-gray-200 rounded-full h-2"
               role="progressbar"
-              aria-valuenow={importProgress.done}
-              aria-valuemin={0}
-              aria-valuemax={importProgress.total}
-              aria-labelledby={opmlProgressId}
+              aria-label="Importing feeds"
+              aria-busy="true"
+              className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
             >
-              <div
-                className="bg-blue-700 h-2 rounded-full transition-all"
-                style={{
-                  width: `${Math.round(
-                    (importProgress.done / importProgress.total) * 100
-                  )}%`,
-                }}
-              />
+              <div className="bg-blue-700 h-2 rounded-full animate-pulse w-full" />
             </div>
           </div>
         )}
 
         {/* Done */}
-        {opmlStep === "done" && (
+        {opmlStep === "done" && importResult !== null && (
           <div className="max-w-lg">
             <div
               role="status"
               aria-live="polite"
               className="mb-4 p-4 bg-green-50 border border-green-200 rounded text-sm text-green-900"
             >
-              {importProgress.total === 0 ? (
+              {importResult.total === 0 ? (
                 <p>All podcasts in this file were already in your library. Nothing to import.</p>
               ) : (
                 <p>
-                  Imported <strong>{importedCount}</strong> of{" "}
-                  <strong>{importProgress.total}</strong>{" "}
-                  {importProgress.total === 1 ? "podcast" : "podcasts"} successfully.
-                  {importProgress.errors.length > 0 && (
+                  Imported <strong>{importResult.succeeded}</strong> of{" "}
+                  <strong>{importResult.total}</strong>{" "}
+                  {importResult.total === 1 ? "podcast" : "podcasts"} successfully.
+                  {importResult.failedTitles.length > 0 && (
                     <>
                       {" "}
-                      {importProgress.errors.length}{" "}
-                      {importProgress.errors.length === 1 ? "feed" : "feeds"} could not
-                      be fetched and were skipped.
+                      {importResult.failedTitles.length}{" "}
+                      {importResult.failedTitles.length === 1 ? "feed" : "feeds"} could
+                      not be fetched and were skipped.
                     </>
                   )}
                 </p>
               )}
             </div>
 
-            {importProgress.errors.length > 0 && (
+            {importResult.failedTitles.length > 0 && (
               <div className="mb-4">
                 <h2 className="text-sm font-semibold text-gray-700 mb-1">
                   Feeds that could not be imported
                 </h2>
                 <ul className="border border-red-100 rounded divide-y divide-red-50 text-sm">
-                  {importProgress.errors.map((title) => (
+                  {importResult.failedTitles.map((title) => (
                     <li key={title} className="px-3 py-2 text-red-800">
                       {title}
                     </li>
