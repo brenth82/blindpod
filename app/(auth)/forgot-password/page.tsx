@@ -7,48 +7,53 @@ import { useAuthActions } from "@convex-dev/auth/react";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter();
   const { signIn } = useAuthActions();
 
-  const [step, setStep] = useState<"login" | "verify">("login");
+  const [step, setStep] = useState<"request" | "reset">("request");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const emailId = useId();
-  const passwordId = useId();
   const codeId = useId();
+  const newPasswordId = useId();
   const errorId = useId();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
-
     try {
-      const result = await signIn("password", { email, password, flow: "signIn" });
-      if (!result) {
-        // Email not yet verified — show OTP step
-        setStep("verify");
-      } else {
-        router.push("/");
-      }
+      await signIn("password", { email, flow: "reset" });
+      setStep("reset");
     } catch {
-      setError("Invalid email or password. Please try again.");
+      setError("Could not send reset code. Check that your email is correct.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await signIn("password", { email, code, flow: "email-verification" });
+      await signIn("password", {
+        email,
+        code,
+        newPassword,
+        flow: "reset-verification",
+      });
       router.push("/");
     } catch {
       setError("Invalid or expired code. Please try again.");
@@ -57,13 +62,13 @@ export default function LoginPage() {
     }
   };
 
-  if (step === "verify") {
+  if (step === "reset") {
     return (
       <>
-        <h1 className="text-3xl font-bold mb-2">Verify your email</h1>
+        <h1 className="text-3xl font-bold mb-2">Set a new password</h1>
         <p className="text-gray-600 mb-6">
-          We sent an 8-digit code to <strong>{email}</strong>. Enter it below to
-          complete sign-in.
+          We sent an 8-digit code to <strong>{email}</strong>. Enter it along
+          with your new password below.
         </p>
 
         {error && (
@@ -78,7 +83,7 @@ export default function LoginPage() {
         )}
 
         <form
-          onSubmit={handleVerify}
+          onSubmit={handleReset}
           aria-describedby={error ? errorId : undefined}
           className="space-y-5 max-w-md"
           noValidate
@@ -88,7 +93,7 @@ export default function LoginPage() {
               htmlFor={codeId}
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Verification code
+              Reset code
             </label>
             <input
               id={codeId}
@@ -104,7 +109,32 @@ export default function LoginPage() {
               aria-describedby={`${codeId}-hint`}
             />
             <p id={`${codeId}-hint`} className="sr-only">
-              Enter the 8-digit code sent to your email address.
+              Enter the 8-digit reset code sent to your email address.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor={newPasswordId}
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              New password
+              <span className="ml-1 text-gray-500 font-normal">(min. 8 characters)</span>
+            </label>
+            <input
+              id={newPasswordId}
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              minLength={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              aria-required="true"
+              aria-describedby={`${newPasswordId}-hint`}
+            />
+            <p id={`${newPasswordId}-hint`} className="sr-only">
+              New password must be at least 8 characters long.
             </p>
           </div>
 
@@ -114,20 +144,21 @@ export default function LoginPage() {
             className="w-full py-2 px-4 bg-blue-700 text-white font-semibold rounded hover:bg-blue-800 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
             aria-disabled={isLoading}
           >
-            {isLoading ? "Verifying…" : "Verify email"}
+            {isLoading ? "Resetting password…" : "Reset password"}
           </button>
         </form>
 
         <button
           type="button"
           onClick={() => {
-            setStep("login");
+            setStep("request");
             setCode("");
+            setNewPassword("");
             setError("");
           }}
           className="mt-4 text-sm text-blue-700 underline"
         >
-          Back to login
+          Back
         </button>
       </>
     );
@@ -135,7 +166,10 @@ export default function LoginPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold mb-6">Log in to Blindpod</h1>
+      <h1 className="text-3xl font-bold mb-2">Reset your password</h1>
+      <p className="text-gray-600 mb-6">
+        Enter your email address and we&rsquo;ll send you a reset code.
+      </p>
 
       {error && (
         <div
@@ -149,7 +183,7 @@ export default function LoginPage() {
       )}
 
       <form
-        onSubmit={handleLogin}
+        onSubmit={handleRequest}
         aria-describedby={error ? errorId : undefined}
         className="space-y-5 max-w-md"
         noValidate
@@ -173,45 +207,20 @@ export default function LoginPage() {
           />
         </div>
 
-        <div>
-          <label
-            htmlFor={passwordId}
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Password
-          </label>
-          <input
-            id={passwordId}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            aria-required="true"
-          />
-        </div>
-
         <button
           type="submit"
           disabled={isLoading}
           className="w-full py-2 px-4 bg-blue-700 text-white font-semibold rounded hover:bg-blue-800 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
           aria-disabled={isLoading}
         >
-          {isLoading ? "Logging in…" : "Log in"}
+          {isLoading ? "Sending code…" : "Send reset code"}
         </button>
       </form>
 
       <p className="mt-4 text-sm text-gray-600">
-        <Link href="/forgot-password" className="underline text-blue-700">
-          Forgot your password?
-        </Link>
-      </p>
-
-      <p className="mt-2 text-sm text-gray-600">
-        Don&rsquo;t have an account?{" "}
-        <Link href="/register" className="underline text-blue-700">
-          Register here
+        Remember your password?{" "}
+        <Link href="/login" className="underline text-blue-700">
+          Log in here
         </Link>
         .
       </p>
