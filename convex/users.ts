@@ -1,6 +1,9 @@
-import { mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { internal } from "./_generated/api";
+import { Resend as ResendAPI } from "resend";
+import { RandomReader, generateRandomString } from "@oslojs/crypto/random";
 
 export const currentUser = query({
   args: {},
@@ -20,7 +23,6 @@ export const getUserProfile = query({
       .query("userProfiles")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
-    // Return defaults if no profile row exists yet
     return profile ?? { notifyOnNewEpisodes: false };
   },
 });
@@ -49,6 +51,148 @@ export const updateNotificationPreference = mutation({
   },
 });
 
+// ── Email change ────────────────────────────────────────────────────────────
+
+export const _getUserByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), args.email))
+      .first();
+  },
+});
+
+export const _storePendingEmailChange = internalMutation({
+  args: {
+    userId: v.id("users"),
+    newEmail: v.string(),
+    code: v.string(),
+    expiry: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+
+    if (profile) {
+      await ctx.db.patch(profile._id, {
+        pendingEmail: args.newEmail,
+        pendingEmailCode: args.code,
+        pendingEmailExpiry: args.expiry,
+      });
+    } else {
+      await ctx.db.insert("userProfiles", {
+        userId: args.userId,
+        notifyOnNewEpisodes: false,
+        pendingEmail: args.newEmail,
+        pendingEmailCode: args.code,
+        pendingEmailExpiry: args.expiry,
+      });
+    }
+  },
+});
+
+/**
+ * Sends a verification OTP to the new email address and stores the pending
+ * change. The user must then call confirmEmailChange with the code.
+ */
+export const requestEmailChange = action({
+  args: { newEmail: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const already = await ctx.runQuery(internal.users._getUserByEmail, {
+      email: args.newEmail,
+    });
+    if (already) throw new Error("That email address is already in use.");
+
+    const random: RandomReader = {
+      read(bytes) {
+        crypto.getRandomValues(bytes);
+      },
+    };
+    const code = generateRandomString(random, "0123456789", 8);
+    const expiry = Date.now() + 3_600_000; // 1 hour
+
+    await ctx.runMutation(internal.users._storePendingEmailChange, {
+      userId,
+      newEmail: args.newEmail,
+      code,
+      expiry,
+    });
+
+    const resend = new ResendAPI(process.env.AUTH_RESEND_KEY);
+    const { error } = await resend.emails.send({
+      from: "Blindpod <noreply@validhit.com>",
+      to: [args.newEmail],
+      subject: "Confirm your new Blindpod email address",
+      text: `Your Blindpod email change code is: ${code}\n\nThis code expires in 1 hour.\n\nIf you did not request this change, you can ignore this email.`,
+    });
+    if (error) throw new Error("Failed to send verification email.");
+  },
+});
+
+/**
+ * Verifies the OTP and updates the email in both the users record and the
+ * Password-provider authAccounts record (providerAccountId = email).
+ */
+export const confirmEmailChange = mutation({
+  args: { code: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
+    if (
+      !profile?.pendingEmail ||
+      !profile?.pendingEmailCode ||
+      !profile?.pendingEmailExpiry
+    ) {
+      throw new Error("No pending email change found.");
+    }
+
+    if (Date.now() > profile.pendingEmailExpiry) {
+      throw new Error("Verification code has expired.");
+    }
+
+    if (args.code !== profile.pendingEmailCode) {
+      throw new Error("Invalid verification code.");
+    }
+
+    const newEmail = profile.pendingEmail;
+
+    // Update the users record
+    await ctx.db.patch(userId, { email: newEmail });
+
+    // Update the Password-provider account so sign-in still works with the new email
+    const account = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) =>
+        q.eq("userId", userId).eq("provider", "password")
+      )
+      .first();
+    if (account) {
+      await ctx.db.patch(account._id, { providerAccountId: newEmail });
+    }
+
+    // Clear pending fields
+    await ctx.db.patch(profile._id, {
+      pendingEmail: undefined,
+      pendingEmailCode: undefined,
+      pendingEmailExpiry: undefined,
+    });
+  },
+});
+
+// ── Account deletion ────────────────────────────────────────────────────────
+
 /**
  * Deletes the currently authenticated user and all data associated with them:
  * - userProfile
@@ -66,31 +210,25 @@ export const deleteCurrentUser = mutation({
 
     // --- App data ---
 
-    // Delete user profile
     const profiles = await ctx.db
       .query("userProfiles")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     for (const p of profiles) await ctx.db.delete(p._id);
 
-    // Delete listened episode records
     const listened = await ctx.db
       .query("listenedEpisodes")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     for (const l of listened) await ctx.db.delete(l._id);
 
-    // Collect subscribed podcast IDs before deleting subscriptions
     const subscriptions = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     const podcastIds = subscriptions.map((s) => s.podcastId);
-
-    // Delete subscriptions
     for (const s of subscriptions) await ctx.db.delete(s._id);
 
-    // For each podcast this user was subscribed to, delete it if no one else is subscribed
     for (const podcastId of podcastIds) {
       const remainingSubscriber = await ctx.db
         .query("subscriptions")
@@ -108,7 +246,6 @@ export const deleteCurrentUser = mutation({
 
     // --- Auth data ---
 
-    // Delete auth accounts and their verification codes
     const accounts = await ctx.db
       .query("authAccounts")
       .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
@@ -122,7 +259,6 @@ export const deleteCurrentUser = mutation({
       await ctx.db.delete(account._id);
     }
 
-    // Delete sessions and their refresh tokens
     const sessions = await ctx.db
       .query("authSessions")
       .withIndex("userId", (q) => q.eq("userId", userId))
@@ -138,7 +274,6 @@ export const deleteCurrentUser = mutation({
       await ctx.db.delete(session._id);
     }
 
-    // Finally, delete the user record itself
     await ctx.db.delete(userId);
   },
 });

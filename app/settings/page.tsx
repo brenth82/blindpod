@@ -2,9 +2,8 @@
 
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 export const dynamic = "force-dynamic";
@@ -18,29 +17,41 @@ export default function SettingsPage() {
   const profile = useQuery(api.users.getUserProfile);
   const updateNotifications = useMutation(api.users.updateNotificationPreference);
   const deleteAccount = useMutation(api.users.deleteCurrentUser);
+  const requestEmailChange = useAction(api.users.requestEmailChange);
+  const confirmEmailChange = useMutation(api.users.confirmEmailChange);
 
   // Notification preference
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifStatus, setNotifStatus] = useState("");
 
-  // Change password
-  const [pwStep, setPwStep] = useState<"idle" | "sent" | "changing">("idle");
-  const [pwCode, setPwCode] = useState("");
+  // Change password (current password + new password — no email OTP needed when logged in)
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [pwSubmitting, setPwSubmitting] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwStatus, setPwStatus] = useState("");
+
+  // Change email
+  const [emailStep, setEmailStep] = useState<"idle" | "code-sent" | "submitting">("idle");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
 
   // Delete account
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
   const [deleteError, setDeleteError] = useState("");
 
-  const codeId = useId();
+  // IDs for aria associations
+  const currentPasswordId = useId();
   const newPasswordId = useId();
   const pwErrorId = useId();
+  const newEmailId = useId();
+  const emailCodeId = useId();
+  const emailErrorId = useId();
   const deleteErrorId = useId();
   const notifStatusId = useId();
 
-  // Redirect unauthenticated users
   if (!authLoading && !isAuthenticated) {
     router.replace("/login");
     return null;
@@ -67,47 +78,66 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSendResetCode = async () => {
-    setPwError("");
-    setPwStatus("");
-    setPwStep("changing");
-    try {
-      await signIn("password", {
-        email: currentUser.email as string,
-        flow: "reset",
-      });
-      setPwStep("sent");
-      setPwStatus("Reset code sent to your email.");
-    } catch {
-      setPwError("Failed to send reset code. Please try again.");
-      setPwStep("idle");
-    }
-  };
-
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError("");
+    setPwStatus("");
 
     if (newPassword.length < 8) {
       setPwError("New password must be at least 8 characters.");
       return;
     }
 
-    setPwStep("changing");
+    setPwSubmitting(true);
     try {
       await signIn("password", {
         email: currentUser.email as string,
-        code: pwCode,
+        password: currentPassword,
         newPassword,
-        flow: "reset-verification",
+        flow: "signIn",
       });
-      setPwStep("idle");
-      setPwCode("");
+      setCurrentPassword("");
       setNewPassword("");
       setPwStatus("Password changed successfully.");
     } catch {
-      setPwError("Invalid or expired code. Please try again.");
-      setPwStep("sent");
+      setPwError("Current password is incorrect. Please try again.");
+    } finally {
+      setPwSubmitting(false);
+    }
+  };
+
+  const handleRequestEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError("");
+    setEmailStatus("");
+    setEmailStep("submitting");
+    try {
+      await requestEmailChange({ newEmail });
+      setEmailStep("code-sent");
+      setEmailStatus(`Verification code sent to ${newEmail}.`);
+    } catch (err: unknown) {
+      setEmailError(
+        err instanceof Error ? err.message : "Failed to send verification code."
+      );
+      setEmailStep("idle");
+    }
+  };
+
+  const handleConfirmEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError("");
+    setEmailStep("submitting");
+    try {
+      await confirmEmailChange({ code: emailCode });
+      setEmailStep("idle");
+      setNewEmail("");
+      setEmailCode("");
+      setEmailStatus("Email address updated successfully.");
+    } catch (err: unknown) {
+      setEmailError(
+        err instanceof Error ? err.message : "Invalid or expired code. Please try again."
+      );
+      setEmailStep("code-sent");
     }
   };
 
@@ -190,102 +220,183 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {pwStatus && pwStep === "idle" && (
+        {pwStatus && (
           <p role="status" aria-live="polite" className="mb-4 text-sm text-green-700">
             {pwStatus}
           </p>
         )}
 
-        {pwStep === "idle" && (
+        <form
+          onSubmit={handleChangePassword}
+          aria-describedby={pwError ? pwErrorId : undefined}
+          className="space-y-4 max-w-md"
+          noValidate
+        >
+          <div>
+            <label
+              htmlFor={currentPasswordId}
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Current password
+            </label>
+            <input
+              id={currentPasswordId}
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              aria-required="true"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor={newPasswordId}
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              New password{" "}
+              <span className="text-gray-500 font-normal">(min. 8 characters)</span>
+            </label>
+            <input
+              id={newPasswordId}
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              minLength={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              aria-required="true"
+            />
+          </div>
+
           <button
-            type="button"
-            onClick={handleSendResetCode}
-            className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 transition-colors"
+            type="submit"
+            disabled={pwSubmitting}
+            className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
           >
-            Send password reset code to my email
+            {pwSubmitting ? "Changing password…" : "Change password"}
           </button>
+        </form>
+      </section>
+
+      {/* Change Email */}
+      <section aria-labelledby="email-heading" className="mb-10">
+        <h2 id="email-heading" className="text-xl font-semibold mb-1">
+          Email address
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Current:{" "}
+          <span className="font-medium text-gray-900">{currentUser.email as string}</span>
+        </p>
+
+        {emailError && (
+          <div
+            id={emailErrorId}
+            role="alert"
+            aria-live="assertive"
+            className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded text-sm"
+          >
+            {emailError}
+          </div>
         )}
 
-        {pwStep === "changing" && (
+        {emailStatus && emailStep === "idle" && (
+          <p role="status" aria-live="polite" className="mb-4 text-sm text-green-700">
+            {emailStatus}
+          </p>
+        )}
+
+        {emailStep === "idle" && !emailStatus && (
+          <form
+            onSubmit={handleRequestEmailChange}
+            className="space-y-4 max-w-md"
+            noValidate
+          >
+            <div>
+              <label
+                htmlFor={newEmailId}
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                New email address
+              </label>
+              <input
+                id={newEmailId}
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                aria-required="true"
+                aria-describedby={emailError ? emailErrorId : undefined}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={emailStep === "submitting"}
+              className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
+            >
+              Send verification code
+            </button>
+          </form>
+        )}
+
+        {emailStep === "submitting" && (
           <p aria-live="polite" className="text-sm text-gray-600">
             Sending code…
           </p>
         )}
 
-        {pwStep === "sent" && (
+        {emailStep === "code-sent" && (
           <>
-            {pwStatus && (
+            {emailStatus && (
               <p role="status" aria-live="polite" className="mb-4 text-sm text-green-700">
-                {pwStatus}
+                {emailStatus}
               </p>
             )}
             <form
-              onSubmit={handleChangePassword}
-              aria-describedby={pwError ? pwErrorId : undefined}
+              onSubmit={handleConfirmEmailChange}
+              aria-describedby={emailError ? emailErrorId : undefined}
               className="space-y-4 max-w-md"
               noValidate
             >
               <div>
                 <label
-                  htmlFor={codeId}
+                  htmlFor={emailCodeId}
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  Reset code
+                  Verification code
                 </label>
                 <input
-                  id={codeId}
+                  id={emailCodeId}
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  value={pwCode}
-                  onChange={(e) => setPwCode(e.target.value)}
+                  value={emailCode}
+                  onChange={(e) => setEmailCode(e.target.value)}
                   required
                   maxLength={8}
                   className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-lg tracking-widest"
                   aria-required="true"
                 />
               </div>
-
-              <div>
-                <label
-                  htmlFor={newPasswordId}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  New password
-                  <span className="ml-1 text-gray-500 font-normal">(min. 8 characters)</span>
-                </label>
-                <input
-                  id={newPasswordId}
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                  minLength={8}
-                  className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  aria-required="true"
-                  aria-describedby={`${newPasswordId}-hint`}
-                />
-                <p id={`${newPasswordId}-hint`} className="sr-only">
-                  New password must be at least 8 characters long.
-                </p>
-              </div>
-
               <div className="flex gap-3">
                 <button
                   type="submit"
                   className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 transition-colors"
                 >
-                  Set new password
+                  Confirm email change
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setPwStep("idle");
-                    setPwCode("");
-                    setNewPassword("");
-                    setPwError("");
-                    setPwStatus("");
+                    setEmailStep("idle");
+                    setEmailCode("");
+                    setEmailError("");
+                    setEmailStatus("");
                   }}
                   className="px-4 py-2 text-sm text-gray-600 underline"
                 >
@@ -335,10 +446,7 @@ export default function SettingsPage() {
             aria-describedby="delete-confirm-desc"
             className="p-4 bg-red-50 border border-red-300 rounded max-w-md"
           >
-            <p
-              id="delete-confirm-heading"
-              className="font-semibold text-red-800 mb-1"
-            >
+            <p id="delete-confirm-heading" className="font-semibold text-red-800 mb-1">
               Are you sure?
             </p>
             <p id="delete-confirm-desc" className="text-sm text-red-700 mb-4">

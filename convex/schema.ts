@@ -10,6 +10,9 @@ export default defineSchema({
   userProfiles: defineTable({
     userId: v.id("users"),
     notifyOnNewEpisodes: v.boolean(),
+    pendingEmail: v.optional(v.string()),
+    pendingEmailCode: v.optional(v.string()),
+    pendingEmailExpiry: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   podcasts: defineTable({
