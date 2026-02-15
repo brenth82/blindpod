@@ -41,7 +41,8 @@ export default defineSchema({
     subscribedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_podcast", ["userId", "podcastId"]),
+    .index("by_user_podcast", ["userId", "podcastId"])
+    .index("by_podcast", ["podcastId"]),
 
   listenedEpisodes: defineTable({
     userId: v.id("users"),
