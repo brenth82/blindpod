@@ -28,6 +28,7 @@ export default function ErrorBoundary({
         >
           Try again
         </button>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/"
           className="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600 transition-colors"
