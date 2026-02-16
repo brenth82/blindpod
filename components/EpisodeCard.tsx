@@ -103,6 +103,7 @@ export const EpisodeCard = memo(function EpisodeCard({
         {/* Native audio player — inherently accessible */}
         <audio
           controls
+          controlsList="nodownload noremoteplayback"
           src={episode.audioUrl}
           className="w-full"
           aria-label={`Audio player for ${episode.title}`}

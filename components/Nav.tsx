@@ -20,13 +20,9 @@ export function Nav() {
   return (
     <nav aria-label="Main navigation" className="bg-gray-900 text-white">
       <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link
-          href="/"
-          className="text-xl font-bold text-white hover:text-blue-300 focus-visible:outline-white"
-          aria-label="Blindpod — go to home"
-        >
+        <span className="text-xl font-bold text-white select-none" aria-hidden="true">
           Blindpod
-        </Link>
+        </span>
 
         <ul className="flex gap-4 list-none m-0 p-0" role="list">
           {(isAuthenticated ? authLinks : []).map(({ href, label }) => (
