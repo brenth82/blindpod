@@ -3,8 +3,9 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 // Internal mutation called from podcastActions.ts (Node runtime)
-export const upsertPodcastAndSubscribe = mutation({
+export const upsertPodcastAndSubscribe = internalMutation({
   args: {
+    userId: v.id("users"),
     rssUrl: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
@@ -20,10 +21,10 @@ export const upsertPodcastAndSubscribe = mutation({
         publishedAt: v.number(),
       })
     ),
-    userId: v.id("users"),
     markAllListened: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const userId = args.userId;
     let podcastId: string;
     const existing = await ctx.db
       .query("podcasts")
@@ -75,13 +76,13 @@ export const upsertPodcastAndSubscribe = mutation({
     const existingSub = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_podcast", (q) =>
-        q.eq("userId", args.userId).eq("podcastId", podcastId as any)
+        q.eq("userId", userId).eq("podcastId", podcastId as any)
       )
       .unique();
 
     if (!existingSub) {
       await ctx.db.insert("subscriptions", {
-        userId: args.userId,
+        userId: userId,
         podcastId: podcastId as any,
         notificationsEnabled: false,
         subscribedAt: Date.now(),
@@ -104,12 +105,12 @@ export const upsertPodcastAndSubscribe = mutation({
         const alreadyListened = await ctx.db
           .query("listenedEpisodes")
           .withIndex("by_user_episode", (q) =>
-            q.eq("userId", args.userId).eq("episodeId", ep._id)
+            q.eq("userId", userId).eq("episodeId", ep._id)
           )
           .unique();
         if (!alreadyListened) {
           await ctx.db.insert("listenedEpisodes", {
-            userId: args.userId,
+            userId: userId,
             episodeId: ep._id,
             listenedAt: now,
             positionSeconds: 0,

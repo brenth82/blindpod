@@ -6,6 +6,7 @@ import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 const authLinks = [
+  { href: "/", label: "Feed" },
   { href: "/podcasts", label: "Podcasts" },
   { href: "/archive", label: "Archive" },
   { href: "/settings", label: "Settings" },

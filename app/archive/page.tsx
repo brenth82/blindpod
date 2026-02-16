@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -20,10 +20,14 @@ export default function ArchivePage() {
     }
   }, [isLoading, isAuthenticated, router]);
 
-  const episodes = useQuery(
+  const [limit, setLimit] = useState(50);
+
+  const archiveResult = useQuery(
     api.episodes.archiveFeed,
-    isAuthenticated ? {} : "skip"
+    isAuthenticated ? { limit } : "skip"
   );
+  const episodes = archiveResult?.episodes;
+  const archiveHasMore = archiveResult?.hasMore ?? false;
 
   const markListened = useMutation(api.episodes.markListened);
   const markUnlistened = useMutation(api.episodes.markUnlistened);
@@ -60,7 +64,10 @@ export default function ArchivePage() {
       ) : (
         <section aria-label="All episodes">
           <p className="text-gray-600 mb-6" aria-live="polite">
-            {episodes.length} {episodes.length === 1 ? "episode" : "episodes"} total
+            {archiveHasMore
+              ? `Showing ${episodes.length} episodes`
+              : `${episodes.length} ${episodes.length === 1 ? "episode" : "episodes"} total`
+            }
           </p>
           <ol className="space-y-4 list-none p-0" aria-label="Episode list">
             {episodes.map((episode) => (
@@ -74,6 +81,18 @@ export default function ArchivePage() {
               </li>
             ))}
           </ol>
+          {archiveHasMore && (
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setLimit((l) => l + 50)}
+                className="px-5 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 transition-colors"
+                aria-label="Load 50 more episodes"
+              >
+                Load 50 more episodes
+              </button>
+            </div>
+          )}
         </section>
       )}
     </>

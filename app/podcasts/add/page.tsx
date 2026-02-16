@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useId, useEffect, useRef, useCallback } from "react";
+import { useState, useId, useEffect, useRef, useCallback, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useAction, useQuery, useConvexAuth } from "convex/react";
+import { useAction, useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import type { PodcastSearchResult } from "@/convex/podcastActions";
 import Link from "next/link";
 
@@ -72,13 +73,15 @@ export default function AddPodcastPage() {
   // ── Shared actions / queries ────────────────────────────────────────────
   const searchPodcasts = useAction(api.podcastActions.searchPodcasts);
   const addPodcast = useAction(api.podcastActions.addPodcast);
-  const importOpmlFeeds = useAction(api.podcastActions.importOpmlFeeds);
+  const startImport = useMutation(api.importJobs.startImport);
   const subscribedPodcasts = useQuery(
     api.podcasts.subscribedPodcasts,
     isAuthenticated ? {} : "skip"
   );
-  const subscribedUrls = new Set(
-    (subscribedPodcasts ?? []).map((p) => p?.rssUrl).filter(Boolean)
+  // useMemo: avoids rebuilding the Set on every render
+  const subscribedUrls = useMemo(
+    () => new Set((subscribedPodcasts ?? []).map((p) => p?.rssUrl).filter(Boolean) as string[]),
+    [subscribedPodcasts]
   );
 
   // ── Shared "mark all listened" toggle ──────────────────────────────────
@@ -87,7 +90,7 @@ export default function AddPodcastPage() {
   // ── Search tab state ────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PodcastSearchResult[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [isSearchPending, startSearchTransition] = useTransition();
   const [searchError, setSearchError] = useState("");
   const [addingFeedUrl, setAddingFeedUrl] = useState<string | null>(null);
   const [addedFeedUrls, setAddedFeedUrls] = useState<Set<string>>(new Set());
@@ -98,7 +101,7 @@ export default function AddPodcastPage() {
   const [rssUrl, setRssUrl] = useState("");
   const [urlError, setUrlError] = useState("");
   const [urlSuccess, setUrlSuccess] = useState("");
-  const [isFetching, setIsFetching] = useState(false);
+  const [isUrlPending, startUrlTransition] = useTransition();
 
   // ── OPML tab state ──────────────────────────────────────────────────────
   type OpmlStep = "idle" | "preview" | "importing" | "done";
@@ -111,6 +114,8 @@ export default function AddPodcastPage() {
     total: number;
   } | null>(null);
   const opmlFileRef = useRef<HTMLInputElement>(null);
+  const [importJobId, setImportJobId] = useState<Id<"importJobs"> | null>(null);
+  const [opmlAnnouncement, setOpmlAnnouncement] = useState("");
 
   // ── ARIA IDs ────────────────────────────────────────────────────────────
   const searchTabId = useId();
@@ -128,33 +133,69 @@ export default function AddPodcastPage() {
   const urlStatusId = useId();
   const opmlFileId = useId();
   const opmlErrorId = useId();
-  const opmlProgressId = useId();
+  const opmlAnnouncementId = useId();
   const markAllListenedId = useId();
+
+  // Reactive subscription to the background import job — no polling, WebSocket push
+  const importJob = useQuery(
+    api.importJobs.getImportJob,
+    importJobId ? { jobId: importJobId } : "skip"
+  );
+
+  // useMemo: OPML feeds not yet subscribed — used in preview, import, and done steps
+  const newFeeds = useMemo(
+    () => opmlFeeds.filter((f) => !subscribedUrls.has(f.url)),
+    [opmlFeeds, subscribedUrls]
+  );
+  const alreadySubCount = opmlFeeds.length - newFeeds.length;
+
+  // Transition to done when the background job completes
+  useEffect(() => {
+    if (importJob?.status === "done" && opmlStep === "importing") {
+      setImportResult({
+        succeeded: importJob.succeeded,
+        failedTitles: importJob.failedTitles,
+        total: importJob.total,
+      });
+      setOpmlStep("done");
+    }
+  }, [importJob, opmlStep]);
+
+  // Announce progress milestones to screen readers
+  useEffect(() => {
+    if (opmlStep !== "importing" || !importJob || importJob.total === 0) return;
+    const done = importJob.succeeded + importJob.failedTitles.length;
+    if (done > 0) {
+      const pct = Math.round((done / importJob.total) * 100);
+      setOpmlAnnouncement(
+        `${pct}% complete — ${importJob.succeeded} of ${importJob.total} podcasts imported so far.`
+      );
+    }
+  }, [importJob, opmlStep]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
     setSearchError("");
     setAddError("");
     setSearchResults(null);
-    setSearching(true);
     setLiveMessage("");
-    try {
-      const results = await searchPodcasts({ query: q });
-      setSearchResults(results);
-      setLiveMessage(
-        results.length === 0
-          ? "No podcasts found."
-          : `${results.length} podcast${results.length === 1 ? "" : "s"} found.`
-      );
-    } catch {
-      setSearchError("Search failed. Please try again.");
-    } finally {
-      setSearching(false);
-    }
+    startSearchTransition(async () => {
+      try {
+        const results = await searchPodcasts({ query: q });
+        setSearchResults(results);
+        setLiveMessage(
+          results.length === 0
+            ? "No podcasts found."
+            : `${results.length} podcast${results.length === 1 ? "" : "s"} found.`
+        );
+      } catch {
+        setSearchError("Search failed. Please try again.");
+      }
+    });
   };
 
   const handleAddFromSearch = async (result: PodcastSearchResult) => {
@@ -173,7 +214,7 @@ export default function AddPodcastPage() {
     }
   };
 
-  const handleUrlSubmit = async (e: React.FormEvent) => {
+  const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setUrlError("");
     setUrlSuccess("");
@@ -188,21 +229,20 @@ export default function AddPodcastPage() {
       setUrlError("Please enter a valid URL (e.g. https://feeds.example.com/podcast).");
       return;
     }
-    setIsFetching(true);
-    try {
-      await addPodcast({ rssUrl: url, markAllListened });
-      setUrlSuccess("Podcast added! Redirecting to your podcasts…");
-      setRssUrl("");
-      setTimeout(() => router.push("/podcasts"), 1500);
-    } catch (err) {
-      setUrlError(
-        err instanceof Error
-          ? err.message
-          : "Failed to add podcast. Please check the URL and try again."
-      );
-    } finally {
-      setIsFetching(false);
-    }
+    startUrlTransition(async () => {
+      try {
+        await addPodcast({ rssUrl: url, markAllListened });
+        setUrlSuccess("Podcast added! Redirecting to your podcasts…");
+        setRssUrl("");
+        setTimeout(() => router.push("/podcasts"), 1500);
+      } catch (err) {
+        setUrlError(
+          err instanceof Error
+            ? err.message
+            : "Failed to add podcast. Please check the URL and try again."
+        );
+      }
+    });
   };
 
   const handleOpmlFile = useCallback(
@@ -235,23 +275,22 @@ export default function AddPodcastPage() {
   );
 
   const handleImport = async () => {
-    const newFeeds = opmlFeeds.filter((f) => !subscribedUrls.has(f.url));
     if (newFeeds.length === 0) {
       setImportResult({ succeeded: 0, failedTitles: [], total: 0 });
       setOpmlStep("done");
       return;
     }
+
     setOpmlStep("importing");
+    setOpmlAnnouncement("");
+
     try {
-      // All RSS fetching happens server-side — the browser just waits for one response
-      const result = await importOpmlFeeds({ feeds: newFeeds, markAllListened });
-      setImportResult({ ...result, total: newFeeds.length });
+      const jobId = await startImport({ feeds: newFeeds, markAllListened });
+      setImportJobId(jobId);
     } catch {
-      setOpmlParseError("Import failed. Please try again.");
+      setOpmlParseError("Failed to start import. Please try again.");
       setOpmlStep("preview");
-      return;
     }
-    setOpmlStep("done");
   };
 
   const resetOpml = () => {
@@ -259,16 +298,13 @@ export default function AddPodcastPage() {
     setOpmlFeeds([]);
     setOpmlParseError("");
     setImportResult(null);
+    setImportJobId(null);
     if (opmlFileRef.current) opmlFileRef.current.value = "";
   };
 
   if (isLoading || !isAuthenticated) {
     return <p role="status" aria-live="polite">Loading…</p>;
   }
-
-  // Derived OPML counts
-  const newFeeds = opmlFeeds.filter((f) => !subscribedUrls.has(f.url));
-  const alreadySubCount = opmlFeeds.length - newFeeds.length;
 
   return (
     <>
@@ -373,10 +409,10 @@ export default function AddPodcastPage() {
           </div>
           <button
             type="submit"
-            disabled={searching || !searchQuery.trim()}
+            disabled={isSearchPending || !searchQuery.trim()}
             className="px-5 py-2 bg-blue-700 text-white font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
           >
-            {searching ? "Searching…" : "Search"}
+            {isSearchPending ? "Searching…" : "Search"}
           </button>
         </form>
 
@@ -573,18 +609,18 @@ export default function AddPodcastPage() {
               autoComplete="off"
               className="w-full px-3 py-2 border border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               aria-required="true"
-              disabled={isFetching}
+              disabled={isUrlPending}
             />
           </div>
           <button
             type="submit"
-            disabled={isFetching}
+            disabled={isUrlPending}
             className="px-6 py-2 bg-blue-700 text-white font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
-            aria-disabled={isFetching}
+            aria-disabled={isUrlPending}
           >
-            {isFetching ? "Fetching podcast…" : "Add podcast"}
+            {isUrlPending ? "Fetching podcast…" : "Add podcast"}
           </button>
-          {isFetching && (
+          {isUrlPending && (
             <p role="status" aria-live="polite" className="text-sm text-gray-600">
               Fetching and parsing the RSS feed. This may take a moment…
             </p>
@@ -700,27 +736,60 @@ export default function AddPodcastPage() {
           </div>
         )}
 
-        {/* Importing — all RSS fetching happens server-side; browser just waits */}
+        {/* Importing — RSS fetching runs as a Convex background job; updates pushed via WebSocket */}
         {opmlStep === "importing" && (
           <div className="max-w-lg">
             <p
+              id={opmlAnnouncementId}
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="text-sm text-gray-700 mb-3"
+              className="sr-only"
             >
-              Importing {newFeeds.length}{" "}
-              {newFeeds.length === 1 ? "podcast" : "podcasts"} — fetching feeds on
-              the server. This may take a moment for large libraries.
+              {opmlAnnouncement ||
+                `Importing ${newFeeds.length} podcast${newFeeds.length === 1 ? "" : "s"}…`}
             </p>
-            <div
-              role="progressbar"
-              aria-label="Importing feeds"
-              aria-busy="true"
-              className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
-            >
-              <div className="bg-blue-700 h-2 rounded-full animate-pulse w-full" />
-            </div>
+            <p aria-hidden="true" className="text-sm text-gray-700 mb-3">
+              Importing {newFeeds.length}{" "}
+              {newFeeds.length === 1 ? "podcast" : "podcasts"} in the background.
+              You can navigate away — the import will continue and your podcasts
+              will appear in your library as they are added.
+            </p>
+            {(() => {
+              const done = importJob
+                ? importJob.succeeded + importJob.failedTitles.length
+                : 0;
+              const pct = importJob && importJob.total > 0
+                ? Math.round((done / importJob.total) * 100)
+                : 0;
+              return (
+                <>
+                  <div
+                    role="progressbar"
+                    aria-labelledby={opmlAnnouncementId}
+                    aria-valuenow={pct > 0 ? pct : undefined}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-busy={pct === 0 ? true : undefined}
+                    className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
+                  >
+                    {pct > 0 ? (
+                      <div
+                        className="bg-blue-700 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    ) : (
+                      <div className="bg-blue-700 h-2 rounded-full animate-pulse w-full" />
+                    )}
+                  </div>
+                  {pct > 0 && (
+                    <p aria-hidden="true" className="text-xs text-gray-500 mt-1">
+                      {done} of {importJob!.total} complete
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 

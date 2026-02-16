@@ -4,13 +4,32 @@ import { SkipLink } from "@/components/SkipLink";
 import { Nav } from "@/components/Nav";
 import { ConvexClientProvider } from "@/lib/convex";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+const DESCRIPTION =
+  "Blindpod is an accessibility-first podcast manager designed for blind and visually impaired users. Keyboard-first, screen reader optimised, WCAG 2.1 AAA.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: {
     default: "Blindpod — Accessible Podcast Manager",
     template: "%s — Blindpod",
   },
-  description:
-    "Blindpod is an accessibility-first podcast manager designed for blind and visually impaired users. Keyboard-first, screen reader optimised, WCAG 2.1 AAA.",
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Blindpod",
+    title: "Blindpod — Accessible Podcast Manager",
+    description: DESCRIPTION,
+    url: APP_URL,
+  },
+  twitter: {
+    card: "summary",
+    title: "Blindpod — Accessible Podcast Manager",
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

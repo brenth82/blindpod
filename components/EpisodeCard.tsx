@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { memo } from "react";
 import { formatDistanceToNow } from "date-fns";
 
 interface Episode {
@@ -15,10 +15,12 @@ interface Episode {
 
 interface EpisodeCardProps {
   episode: Episode;
+  // React 19: ref passed as a plain prop, no forwardRef needed
+  ref?: React.Ref<HTMLElement>;
   onMarkListened?: (id: string) => void;
   onMarkUnlistened?: (id: string) => void;
   listened?: boolean;
-  nextRef?: React.RefObject<HTMLElement>;
+  nextRef?: React.RefObject<HTMLElement | null>;
 }
 
 function formatDuration(seconds: number): string {
@@ -30,15 +32,15 @@ function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
-export function EpisodeCard({
+// memo: prevents re-render of unchanged cards when any sibling episode changes
+export const EpisodeCard = memo(function EpisodeCard({
   episode,
+  ref,
   onMarkListened,
   onMarkUnlistened,
   listened = false,
   nextRef,
 }: EpisodeCardProps) {
-  const articleRef = useRef<HTMLElement>(null);
-
   const handleMarkListened = () => {
     onMarkListened?.(episode._id);
     // Move focus to next episode after marking as listened
@@ -57,7 +59,7 @@ export function EpisodeCard({
 
   return (
     <article
-      ref={articleRef as React.RefObject<HTMLElement>}
+      ref={ref}
       tabIndex={-1}
       className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm"
       aria-label={`Episode: ${episode.title}`}
@@ -144,4 +146,4 @@ export function EpisodeCard({
       </div>
     </article>
   );
-}
+});

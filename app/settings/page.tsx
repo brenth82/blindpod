@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,12 @@ export default function SettingsPage() {
   // Delete account
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
   const [deleteError, setDeleteError] = useState("");
+
+  const closeDeleteDialog = () => {
+    setDeleteStep("idle");
+    setDeleteError("");
+  };
+  const deleteDialogRef = useFocusTrap(deleteStep === "confirm", closeDeleteDialog);
 
   // IDs for aria associations
   const currentPasswordId = useId();
@@ -309,7 +316,7 @@ export default function SettingsPage() {
           </p>
         )}
 
-        {emailStep === "idle" && !emailStatus && (
+        {(emailStep === "idle" || emailStep === "submitting") && !emailStatus && (
           <form
             onSubmit={handleRequestEmailChange}
             className="space-y-4 max-w-md"
@@ -339,15 +346,9 @@ export default function SettingsPage() {
               disabled={emailStep === "submitting"}
               className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 transition-colors"
             >
-              Send verification code
+              {emailStep === "submitting" ? "Sending code…" : "Send verification code"}
             </button>
           </form>
-        )}
-
-        {emailStep === "submitting" && (
-          <p aria-live="polite" className="text-sm text-gray-600">
-            Sending code…
-          </p>
         )}
 
         {emailStep === "code-sent" && (
@@ -441,6 +442,7 @@ export default function SettingsPage() {
 
         {deleteStep === "confirm" && (
           <div
+            ref={deleteDialogRef}
             role="alertdialog"
             aria-labelledby="delete-confirm-heading"
             aria-describedby="delete-confirm-desc"
@@ -462,10 +464,7 @@ export default function SettingsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setDeleteStep("idle");
-                  setDeleteError("");
-                }}
+                onClick={closeDeleteDialog}
                 className="px-4 py-2 text-sm text-gray-600 underline"
               >
                 Cancel

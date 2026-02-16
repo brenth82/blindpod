@@ -55,4 +55,14 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_episode", ["userId", "episodeId"]),
+
+  importJobs: defineTable({
+    userId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("running"), v.literal("done")),
+    total: v.number(),
+    succeeded: v.number(),
+    failedTitles: v.array(v.string()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
 });

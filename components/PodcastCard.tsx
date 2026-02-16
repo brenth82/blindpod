@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 
 interface Podcast {
@@ -16,7 +17,7 @@ interface PodcastCardProps {
   onUnsubscribe?: (id: string) => void;
 }
 
-export function PodcastCard({
+export const PodcastCard = memo(function PodcastCard({
   podcast,
   episodeCount,
   onUnsubscribe,
@@ -78,4 +79,4 @@ export function PodcastCard({
       </div>
     </article>
   );
-}
+});

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { PodcastCard } from "@/components/PodcastCard";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -15,6 +16,12 @@ export default function PodcastsPage() {
   const router = useRouter();
 
   const [confirmUnsubscribeId, setConfirmUnsubscribeId] = useState<string | null>(null);
+
+  const closeUnsubscribeDialog = () => setConfirmUnsubscribeId(null);
+  const unsubscribeDialogRef = useFocusTrap(
+    confirmUnsubscribeId !== null,
+    closeUnsubscribeDialog
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -51,6 +58,7 @@ export default function PodcastsPage() {
       {/* Inline unsubscribe confirmation */}
       {confirmingPodcast && (
         <div
+          ref={unsubscribeDialogRef}
           role="alertdialog"
           aria-labelledby="unsub-confirm-heading"
           aria-describedby="unsub-confirm-desc"
@@ -72,7 +80,7 @@ export default function PodcastsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setConfirmUnsubscribeId(null)}
+              onClick={closeUnsubscribeDialog}
               className="px-4 py-2 text-sm text-gray-700 underline"
             >
               Cancel

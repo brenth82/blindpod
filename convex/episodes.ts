@@ -2,18 +2,20 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+const FEED_LIMIT = 50;
+
 export const unlistenedFeed = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+    if (!userId) return { episodes: [], hasMore: false };
 
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    if (subs.length === 0) return [];
+    if (subs.length === 0) return { episodes: [], hasMore: false };
 
     const listenedRecords = await ctx.db
       .query("listenedEpisodes")
@@ -32,24 +34,29 @@ export const unlistenedFeed = query({
       )
     ).flat();
 
-    return allEpisodes
+    const filtered = allEpisodes
       .filter((ep) => !ep.isArchivedFromFeed && !listenedIds.has(ep._id.toString()))
       .sort((a, b) => b.publishedAt - a.publishedAt);
+
+    return {
+      episodes: filtered.slice(0, FEED_LIMIT),
+      hasMore: filtered.length > FEED_LIMIT,
+    };
   },
 });
 
 export const archiveFeed = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit = 50 }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+    if (!userId) return { episodes: [], hasMore: false };
 
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    if (subs.length === 0) return [];
+    if (subs.length === 0) return { episodes: [], hasMore: false };
 
     const listenedRecords = await ctx.db
       .query("listenedEpisodes")
@@ -68,9 +75,14 @@ export const archiveFeed = query({
       )
     ).flat();
 
-    return allEpisodes
+    const sorted = allEpisodes
       .sort((a, b) => b.publishedAt - a.publishedAt)
       .map((ep) => ({ ...ep, listened: listenedIds.has(ep._id.toString()) }));
+
+    return {
+      episodes: sorted.slice(0, limit),
+      hasMore: sorted.length > limit,
+    };
   },
 });
 

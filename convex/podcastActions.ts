@@ -1,6 +1,6 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -79,38 +79,35 @@ export const addPodcast = action({
       );
     }
 
-    await ctx.runMutation((internal as any).podcasts.upsertPodcastAndSubscribe, {
+    await ctx.runMutation(internal.podcasts.upsertPodcastAndSubscribe, {
+      userId,
       rssUrl,
       title: feed.title ?? "Unknown Podcast",
       description: feed.description ?? undefined,
       imageUrl: feed.image?.url ?? (feed as any).itunes?.image ?? undefined,
       author: (feed as any).itunes?.author ?? undefined,
       episodes: extractEpisodes(feed),
-      userId,
       markAllListened: markAllListened ?? false,
     });
   },
 });
 
 /**
- * Imports a batch of RSS feeds server-side. The client passes the list of
- * { url, title } pairs (already parsed from the OPML file client-side) and
- * this action fetches + stores them all — keeping the browser free.
- *
- * Feeds are processed in batches of 10 concurrent requests so we don't
- * overwhelm RSS servers or hit Convex concurrency limits.
+ * Processes an OPML import job in the background.
+ * Called via ctx.scheduler from importJobs.startImport — never directly by the browser.
  */
-export const importOpmlFeeds = action({
+export const processOpmlImport = internalAction({
   args: {
+    jobId: v.id("importJobs"),
     feeds: v.array(v.object({ url: v.string(), title: v.string() })),
-    markAllListened: v.optional(v.boolean()),
+    markAllListened: v.boolean(),
+    userId: v.id("users"),
   },
-  handler: async (
-    ctx,
-    { feeds, markAllListened }
-  ): Promise<{ succeeded: number; failedTitles: string[] }> => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+  handler: async (ctx, { jobId, feeds, markAllListened, userId }) => {
+    await ctx.runMutation((internal as any).importJobs.updateJob, {
+      jobId,
+      status: "running",
+    });
 
     const Parser = (await import("rss-parser")).default;
     const parser = new Parser();
@@ -118,39 +115,41 @@ export const importOpmlFeeds = action({
     let succeeded = 0;
     const failedTitles: string[] = [];
 
-    const BATCH = 10;
-    for (let i = 0; i < feeds.length; i += BATCH) {
-      const batch = feeds.slice(i, i + BATCH);
-      const results = await Promise.allSettled(
-        batch.map(async ({ url: rssUrl }) => {
-          const feed = await parser.parseURL(rssUrl);
-          await ctx.runMutation(
-            (internal as any).podcasts.upsertPodcastAndSubscribe,
-            {
-              rssUrl,
-              title: feed.title ?? "Unknown Podcast",
-              description: feed.description ?? undefined,
-              imageUrl:
-                feed.image?.url ?? (feed as any).itunes?.image ?? undefined,
-              author: (feed as any).itunes?.author ?? undefined,
-              episodes: extractEpisodes(feed),
-              userId,
-              markAllListened: markAllListened ?? false,
-            }
-          );
-        })
-      );
-
-      for (let j = 0; j < results.length; j++) {
-        if (results[j].status === "fulfilled") {
+    try {
+      for (const { url, title } of feeds) {
+        try {
+          const feed = await parser.parseURL(url);
+          await ctx.runMutation(internal.podcasts.upsertPodcastAndSubscribe, {
+            userId,
+            rssUrl: url,
+            title: feed.title ?? title,
+            description: feed.description ?? undefined,
+            imageUrl: feed.image?.url ?? (feed as any).itunes?.image ?? undefined,
+            author: (feed as any).itunes?.author ?? undefined,
+            episodes: extractEpisodes(feed),
+            markAllListened,
+          });
           succeeded++;
-        } else {
-          failedTitles.push(batch[j].title);
+        } catch {
+          failedTitles.push(title);
         }
-      }
-    }
 
-    return { succeeded, failedTitles };
+        // Push progress after every feed so the browser updates reactively
+        await ctx.runMutation((internal as any).importJobs.updateJob, {
+          jobId,
+          succeeded,
+          failedTitles,
+        });
+      }
+    } finally {
+      await ctx.runMutation((internal as any).importJobs.updateJob, {
+        jobId,
+        status: "done",
+        succeeded,
+        failedTitles,
+        completedAt: Date.now(),
+      });
+    }
   },
 });
 
@@ -160,10 +159,13 @@ export const importOpmlFeeds = action({
 function extractEpisodes(feed: any) {
   return (feed.items ?? [])
     .filter((item: any) => item.enclosure?.url)
+    .slice(0, 100) // only the 100 most recent; feeds are newest-first
     .map((item: any) => ({
       guid: item.guid ?? item.link ?? item.title ?? String(Date.now()),
       title: item.title ?? "Untitled Episode",
-      description: item.contentSnippet ?? item.content ?? undefined,
+      description: item.contentSnippet
+        ? item.contentSnippet.slice(0, 500)
+        : undefined,
       audioUrl: item.enclosure.url as string,
       durationSeconds: item.itunes?.duration
         ? parseDuration(item.itunes.duration)
