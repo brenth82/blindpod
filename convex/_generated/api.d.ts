@@ -16,6 +16,7 @@ import type * as episodes from "../episodes.js";
 import type * as feedRefresh from "../feedRefresh.js";
 import type * as http from "../http.js";
 import type * as importJobs from "../importJobs.js";
+import type * as maintenance from "../maintenance.js";
 import type * as podcastActions from "../podcastActions.js";
 import type * as podcasts from "../podcasts.js";
 import type * as users from "../users.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   feedRefresh: typeof feedRefresh;
   http: typeof http;
   importJobs: typeof importJobs;
+  maintenance: typeof maintenance;
   podcastActions: typeof podcastActions;
   podcasts: typeof podcasts;
   users: typeof users;
