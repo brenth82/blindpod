@@ -128,3 +128,154 @@ export const markUnlistened = mutation({
     }
   },
 });
+
+export const unlistenedEpisodesForPodcast = query({
+  args: { podcastId: v.id("podcasts") },
+  handler: async (ctx, { podcastId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user_podcast", (q) =>
+        q.eq("userId", userId).eq("podcastId", podcastId)
+      )
+      .unique();
+    if (!sub) return null;
+
+    const podcast = await ctx.db.get(podcastId);
+    if (!podcast) return null;
+
+    const episodes = await ctx.db
+      .query("episodes")
+      .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+      .collect();
+
+    const listenedRecords = await ctx.db
+      .query("listenedEpisodes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
+
+    const unlistened = episodes
+      .filter((ep) => !ep.isArchivedFromFeed && !listenedIds.has(ep._id.toString()))
+      .sort((a, b) => b.publishedAt - a.publishedAt);
+
+    return { podcast, episodes: unlistened };
+  },
+});
+
+export const markManyListened = mutation({
+  args: { episodeIds: v.array(v.id("episodes")) },
+  handler: async (ctx, { episodeIds }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const listenedRecords = await ctx.db
+      .query("listenedEpisodes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
+
+    const now = Date.now();
+    await Promise.all(
+      episodeIds
+        .filter((id) => !listenedIds.has(id.toString()))
+        .map((episodeId) =>
+          ctx.db.insert("listenedEpisodes", {
+            userId,
+            episodeId,
+            listenedAt: now,
+            positionSeconds: 0,
+          })
+        )
+    );
+  },
+});
+
+export const markAllListenedForPodcast = mutation({
+  args: { podcastId: v.id("podcasts") },
+  handler: async (ctx, { podcastId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user_podcast", (q) =>
+        q.eq("userId", userId).eq("podcastId", podcastId)
+      )
+      .unique();
+    if (!sub) throw new Error("Not subscribed to this podcast");
+
+    const episodes = await ctx.db
+      .query("episodes")
+      .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+      .collect();
+
+    const listenedRecords = await ctx.db
+      .query("listenedEpisodes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
+
+    const now = Date.now();
+    await Promise.all(
+      episodes
+        .filter((ep) => !ep.isArchivedFromFeed && !listenedIds.has(ep._id.toString()))
+        .map((ep) =>
+          ctx.db.insert("listenedEpisodes", {
+            userId,
+            episodeId: ep._id,
+            listenedAt: now,
+            positionSeconds: 0,
+          })
+        )
+    );
+  },
+});
+
+export const markAllListenedForFeed = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const subs = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    if (subs.length === 0) return;
+
+    const listenedRecords = await ctx.db
+      .query("listenedEpisodes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const listenedIds = new Set(listenedRecords.map((r) => r.episodeId.toString()));
+
+    const allEpisodes = (
+      await Promise.all(
+        subs.map((sub) =>
+          ctx.db
+            .query("episodes")
+            .withIndex("by_podcast", (q) => q.eq("podcastId", sub.podcastId))
+            .collect()
+        )
+      )
+    ).flat();
+
+    const now = Date.now();
+    await Promise.all(
+      allEpisodes
+        .filter((ep) => !ep.isArchivedFromFeed && !listenedIds.has(ep._id.toString()))
+        .map((ep) =>
+          ctx.db.insert("listenedEpisodes", {
+            userId,
+            episodeId: ep._id,
+            listenedAt: now,
+            positionSeconds: 0,
+          })
+        )
+    );
+  },
+});
