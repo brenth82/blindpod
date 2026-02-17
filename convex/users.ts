@@ -192,6 +192,26 @@ export const confirmEmailChange = mutation({
   },
 });
 
+export const cleanupExpiredEmailChanges = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const profiles = await ctx.db.query("userProfiles").collect();
+    let cleaned = 0;
+    for (const profile of profiles) {
+      if (profile.pendingEmailExpiry !== undefined && now > profile.pendingEmailExpiry) {
+        await ctx.db.patch(profile._id, {
+          pendingEmail: undefined,
+          pendingEmailCode: undefined,
+          pendingEmailExpiry: undefined,
+        });
+        cleaned++;
+      }
+    }
+    return cleaned;
+  },
+});
+
 // ── Account deletion ────────────────────────────────────────────────────────
 
 /**
