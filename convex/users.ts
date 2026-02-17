@@ -1,9 +1,10 @@
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import { Resend as ResendAPI } from "resend";
 import { RandomReader, generateRandomString } from "@oslojs/crypto/random";
+import { Scrypt } from "lucia";
 
 export const currentUser = query({
   args: {},
@@ -102,12 +103,12 @@ export const requestEmailChange = action({
   args: { newEmail: v.string() },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const already = await ctx.runQuery(internal.users._getUserByEmail, {
       email: args.newEmail,
     });
-    if (already) throw new Error("That email address is already in use.");
+    if (already) throw new ConvexError("That email address is already in use.");
 
     const random: RandomReader = {
       read(bytes) {
@@ -131,7 +132,7 @@ export const requestEmailChange = action({
       subject: "Confirm your new Blindpod email address",
       text: `Your Blindpod email change code is: ${code}\n\nThis code expires in 1 hour.\n\nIf you did not request this change, you can ignore this email.`,
     });
-    if (error) throw new Error("Failed to send verification email.");
+    if (error) throw new ConvexError(`Failed to send verification email: ${error.message}`);
   },
 });
 
@@ -143,7 +144,7 @@ export const confirmEmailChange = mutation({
   args: { code: v.string() },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const profile = await ctx.db
       .query("userProfiles")
@@ -155,15 +156,15 @@ export const confirmEmailChange = mutation({
       !profile?.pendingEmailCode ||
       !profile?.pendingEmailExpiry
     ) {
-      throw new Error("No pending email change found.");
+      throw new ConvexError("No pending email change found.");
     }
 
     if (Date.now() > profile.pendingEmailExpiry) {
-      throw new Error("Verification code has expired.");
+      throw new ConvexError("Verification code has expired.");
     }
 
     if (args.code !== profile.pendingEmailCode) {
-      throw new Error("Invalid verification code.");
+      throw new ConvexError("Invalid verification code.");
     }
 
     const newEmail = profile.pendingEmail;
@@ -275,5 +276,38 @@ export const deleteCurrentUser = mutation({
     }
 
     await ctx.db.delete(userId);
+  },
+});
+
+export const changePassword = mutation({
+  args: {
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, { currentPassword, newPassword }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    const email = (user as any).email as string;
+
+    const account = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", email)
+      )
+      .unique();
+
+    if (!account?.secret) throw new Error("Account not found");
+
+    const valid = await new Scrypt().verify(account.secret, currentPassword);
+    if (!valid) throw new Error("Invalid current password");
+
+    if (newPassword.length < 8) throw new Error("New password too short");
+
+    const newHash = await new Scrypt().hash(newPassword);
+    await ctx.db.patch(account._id, { secret: newHash });
   },
 });

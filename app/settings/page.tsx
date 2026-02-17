@@ -3,7 +3,6 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
 import { useFocusTrap } from "@/lib/useFocusTrap";
 
@@ -12,12 +11,12 @@ export const dynamic = "force-dynamic";
 export default function SettingsPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const { signIn } = useAuthActions();
 
   const currentUser = useQuery(api.users.currentUser);
   const profile = useQuery(api.users.getUserProfile);
   const updateNotifications = useMutation(api.users.updateNotificationPreference);
   const deleteAccount = useMutation(api.users.deleteCurrentUser);
+  const changePasswordMutation = useMutation(api.users.changePassword);
   const requestEmailChange = useAction(api.users.requestEmailChange);
   const confirmEmailChange = useMutation(api.users.confirmEmailChange);
 
@@ -97,12 +96,7 @@ export default function SettingsPage() {
 
     setPwSubmitting(true);
     try {
-      await signIn("password", {
-        email: currentUser.email as string,
-        password: currentPassword,
-        newPassword,
-        flow: "signIn",
-      });
+      await changePasswordMutation({ currentPassword, newPassword });
       setCurrentPassword("");
       setNewPassword("");
       setPwStatus("Password changed successfully.");

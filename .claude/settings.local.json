@@ -37,7 +37,30 @@
       "Bash(cmd.exe /c \"netstat -ano | findstr \"\":300\"\" | findstr LISTENING\")",
       "Bash(cmd.exe:*)",
       "Bash(ls:*)",
-      "Bash(npx skills:*)"
+      "Bash(npx skills:*)",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Vercel__get_deployment",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex env set:*)",
+      "Bash(vercel --version:*)",
+      "Bash(npx vercel:*)",
+      "Bash(vercel env ls:*)",
+      "Bash(vercel env rm:*)",
+      "Bash(vercel env add:*)",
+      "Bash(vercel:*)",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex env list:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex data:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex logs:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex env get:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx @convex-dev/auth generate-key:*)",
+      "Bash(git stash:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex run:*)",
+      "Bash(printf:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 cat:*)",
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex deploy:*)"
     ]
   }
 }
