@@ -67,6 +67,7 @@ export default function PodcastsPage() {
 
   const unsubscribeMutation = useMutation(api.podcasts.unsubscribe);
   const markAllListenedForPodcast = useMutation(api.episodes.markAllListenedForPodcast);
+  const setNotificationsEnabled = useMutation(api.podcasts.setNotificationsEnabled);
 
   const handleUnsubscribeConfirm = async () => {
     if (!confirmUnsubscribeId) return;
@@ -225,8 +226,12 @@ export default function PodcastsPage() {
                 <li key={podcast._id}>
                   <PodcastCard
                     podcast={podcast}
+                    notificationsEnabled={podcast.notificationsEnabled}
                     onUnsubscribe={(id) => setConfirmUnsubscribeId(id)}
                     onMarkAllListened={(id) => setConfirmMarkAllId(id)}
+                    onToggleNotifications={(id, enabled) =>
+                      setNotificationsEnabled({ podcastId: id as Id<"podcasts">, enabled })
+                    }
                   />
                 </li>
               ) : null

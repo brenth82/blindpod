@@ -86,6 +86,7 @@ export default function AddPodcastPage() {
 
   // ── Shared "mark all listened" toggle ──────────────────────────────────
   const [markAllListened, setMarkAllListened] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   // ── Search tab state ────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -135,6 +136,7 @@ export default function AddPodcastPage() {
   const opmlErrorId = useId();
   const opmlAnnouncementId = useId();
   const markAllListenedId = useId();
+  const notificationsEnabledId = useId();
 
   // Reactive subscription to the background import job — no polling, WebSocket push
   const importJob = useQuery(
@@ -202,7 +204,7 @@ export default function AddPodcastPage() {
     setAddError("");
     setAddingFeedUrl(result.feedUrl);
     try {
-      await addPodcast({ rssUrl: result.feedUrl, markAllListened });
+      await addPodcast({ rssUrl: result.feedUrl, markAllListened, notificationsEnabled });
       setAddedFeedUrls((prev) => new Set(prev).add(result.feedUrl));
       setLiveMessage(`${result.title} added to Blindpod.`);
     } catch (err) {
@@ -231,7 +233,7 @@ export default function AddPodcastPage() {
     }
     startUrlTransition(async () => {
       try {
-        await addPodcast({ rssUrl: url, markAllListened });
+        await addPodcast({ rssUrl: url, markAllListened, notificationsEnabled });
         setUrlSuccess("Podcast added! Redirecting to your podcasts…");
         setRssUrl("");
         setTimeout(() => router.push("/podcasts"), 1500);
@@ -285,7 +287,7 @@ export default function AddPodcastPage() {
     setOpmlAnnouncement("");
 
     try {
-      const jobId = await startImport({ feeds: newFeeds, markAllListened });
+      const jobId = await startImport({ feeds: newFeeds, markAllListened, notificationsEnabled });
       setImportJobId(jobId);
     } catch {
       setOpmlParseError("Failed to start import. Please try again.");
@@ -322,20 +324,35 @@ export default function AddPodcastPage() {
 
       <h1 className="text-3xl font-bold mb-4">Add a podcast</h1>
 
-      {/* ── Mark all listened toggle — shared across all add methods ── */}
-      <div className="flex items-start gap-3 mb-6 p-3 bg-gray-100 rounded max-w-xl">
-        <input
-          id={markAllListenedId}
-          type="checkbox"
-          checked={markAllListened}
-          onChange={(e) => setMarkAllListened(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-400 text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 cursor-pointer"
-        />
-        <label htmlFor={markAllListenedId} className="text-sm text-gray-800 cursor-pointer select-none">
-          <span className="font-medium">I&rsquo;m already caught up</span> — mark all
-          existing episodes as listened and archive them. Only new episodes will appear
-          in your feed.
-        </label>
+      {/* ── Shared options — apply to all add methods ── */}
+      <div className="mb-6 p-3 bg-gray-100 rounded max-w-xl space-y-3">
+        <div className="flex items-start gap-3">
+          <input
+            id={markAllListenedId}
+            type="checkbox"
+            checked={markAllListened}
+            onChange={(e) => setMarkAllListened(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-400 text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 cursor-pointer"
+          />
+          <label htmlFor={markAllListenedId} className="text-sm text-gray-800 cursor-pointer select-none">
+            <span className="font-medium">I&rsquo;m already caught up</span> — mark all
+            existing episodes as listened and archive them. Only new episodes will appear
+            in your feed.
+          </label>
+        </div>
+        <div className="flex items-start gap-3">
+          <input
+            id={notificationsEnabledId}
+            type="checkbox"
+            checked={notificationsEnabled}
+            onChange={(e) => setNotificationsEnabled(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-400 text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 cursor-pointer"
+          />
+          <label htmlFor={notificationsEnabledId} className="text-sm text-gray-800 cursor-pointer select-none">
+            <span className="font-medium">Email me when new episodes are released</span> — receive
+            a notification email for each new episode of this podcast.
+          </label>
+        </div>
       </div>
 
       {/* ── Tab list ── */}

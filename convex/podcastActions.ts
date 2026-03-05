@@ -62,8 +62,12 @@ export const searchPodcasts = action({
 });
 
 export const addPodcast = action({
-  args: { rssUrl: v.string(), markAllListened: v.optional(v.boolean()) },
-  handler: async (ctx, { rssUrl, markAllListened }) => {
+  args: {
+    rssUrl: v.string(),
+    markAllListened: v.optional(v.boolean()),
+    notificationsEnabled: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { rssUrl, markAllListened, notificationsEnabled }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -88,6 +92,7 @@ export const addPodcast = action({
       author: (feed as any).itunes?.author ?? undefined,
       episodes: extractEpisodes(feed),
       markAllListened: markAllListened ?? false,
+      notificationsEnabled: notificationsEnabled ?? false,
     });
   },
 });
@@ -101,9 +106,10 @@ export const processOpmlImport = internalAction({
     jobId: v.id("importJobs"),
     feeds: v.array(v.object({ url: v.string(), title: v.string() })),
     markAllListened: v.boolean(),
+    notificationsEnabled: v.boolean(),
     userId: v.id("users"),
   },
-  handler: async (ctx, { jobId, feeds, markAllListened, userId }) => {
+  handler: async (ctx, { jobId, feeds, markAllListened, notificationsEnabled, userId }) => {
     await ctx.runMutation((internal as any).importJobs.updateJob, {
       jobId,
       status: "running",
@@ -128,6 +134,7 @@ export const processOpmlImport = internalAction({
             author: (feed as any).itunes?.author ?? undefined,
             episodes: extractEpisodes(feed),
             markAllListened,
+            notificationsEnabled,
           });
           succeeded++;
         } catch {

@@ -12,8 +12,9 @@ export const startImport = mutation({
   args: {
     feeds: v.array(v.object({ url: v.string(), title: v.string() })),
     markAllListened: v.boolean(),
+    notificationsEnabled: v.boolean(),
   },
-  handler: async (ctx, { feeds, markAllListened }) => {
+  handler: async (ctx, { feeds, markAllListened, notificationsEnabled }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -30,6 +31,7 @@ export const startImport = mutation({
       jobId,
       feeds,
       markAllListened,
+      notificationsEnabled,
       userId,
     });
 

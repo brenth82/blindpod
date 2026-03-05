@@ -15,15 +15,19 @@ interface Podcast {
 interface PodcastCardProps {
   podcast: Podcast;
   episodeCount?: number;
+  notificationsEnabled?: boolean;
   onUnsubscribe?: (id: string) => void;
   onMarkAllListened?: (id: string) => void;
+  onToggleNotifications?: (id: string, enabled: boolean) => void;
 }
 
 export const PodcastCard = memo(function PodcastCard({
   podcast,
   episodeCount,
+  notificationsEnabled,
   onUnsubscribe,
   onMarkAllListened,
+  onToggleNotifications,
 }: PodcastCardProps) {
   return (
     <article
@@ -75,7 +79,19 @@ export const PodcastCard = memo(function PodcastCard({
           </p>
         )}
 
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2 items-center">
+          {onToggleNotifications !== undefined && notificationsEnabled !== undefined && (
+            <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={(e) => onToggleNotifications(podcast._id, e.target.checked)}
+                className="h-4 w-4 rounded border-gray-400 text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 cursor-pointer"
+                aria-label={`Email notifications for ${podcast.title}`}
+              />
+              Email notifications
+            </label>
+          )}
           {onMarkAllListened && (
             <button
               onClick={() => onMarkAllListened(podcast._id)}

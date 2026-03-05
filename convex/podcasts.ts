@@ -22,6 +22,7 @@ export const upsertPodcastAndSubscribe = internalMutation({
       })
     ),
     markAllListened: v.optional(v.boolean()),
+    notificationsEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = args.userId;
@@ -84,7 +85,7 @@ export const upsertPodcastAndSubscribe = internalMutation({
       await ctx.db.insert("subscriptions", {
         userId: userId,
         podcastId: podcastId as any,
-        notificationsEnabled: false,
+        notificationsEnabled: args.notificationsEnabled ?? false,
         subscribedAt: Date.now(),
       });
     }
@@ -134,11 +135,15 @@ export const subscribedPodcasts = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    const podcasts = await Promise.all(
-      subs.map((sub) => ctx.db.get(sub.podcastId))
+    const results = await Promise.all(
+      subs.map(async (sub) => {
+        const podcast = await ctx.db.get(sub.podcastId);
+        if (!podcast) return null;
+        return { ...podcast, notificationsEnabled: sub.notificationsEnabled };
+      })
     );
 
-    return podcasts.filter(Boolean);
+    return results.filter(Boolean);
   },
 });
 
@@ -157,6 +162,25 @@ export const unsubscribe = mutation({
 
     if (sub) {
       await ctx.db.delete(sub._id);
+    }
+  },
+});
+
+export const setNotificationsEnabled = mutation({
+  args: { podcastId: v.id("podcasts"), enabled: v.boolean() },
+  handler: async (ctx, { podcastId, enabled }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user_podcast", (q) =>
+        q.eq("userId", userId).eq("podcastId", podcastId)
+      )
+      .unique();
+
+    if (sub) {
+      await ctx.db.patch(sub._id, { notificationsEnabled: enabled });
     }
   },
 });
@@ -256,6 +280,8 @@ export const getSubscribersForNotification = internalQuery({
 
     const result: { email: string; subscribedAt: number }[] = [];
     for (const sub of subs) {
+      if (!sub.notificationsEnabled) continue;
+
       const profile = await ctx.db
         .query("userProfiles")
         .withIndex("by_user", (q) => q.eq("userId", sub.userId))

@@ -74,7 +74,10 @@ export const refreshAllFeeds = internalAction({
           //   1. Have global notifications enabled (checked inside the query)
           //   2. Subscribed BEFORE the episode was published — this prevents
           //      bulk-imported backlog episodes from ever triggering emails.
-          if (newEpisodes.length > 0) {
+          //   3. Only send in production to avoid duplicate emails from dev
+          const isProduction = process.env.CONVEX_ENV === "production";
+
+          if (newEpisodes.length > 0 && isProduction) {
             const subscribers: { email: string; subscribedAt: number }[] =
               await ctx.runQuery(
                 internal.podcasts.getSubscribersForNotification,

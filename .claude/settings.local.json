@@ -60,7 +60,8 @@
       "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex run:*)",
       "Bash(printf:*)",
       "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 cat:*)",
-      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex deploy:*)"
+      "Bash(CONVEX_DEPLOYMENT=prod:robust-ant-878 npx convex deploy:*)",
+      "mcp__claude_ai_Vercel__deploy_to_vercel"
     ]
   }
 }
